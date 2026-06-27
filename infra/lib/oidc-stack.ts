@@ -15,10 +15,12 @@ export class OidcStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: OidcStackProps) {
     super(scope, id, props);
 
-    const oidcProvider = new iam.OpenIdConnectProvider(this, "GithubProvider", {
-      url: "https://token.actions.githubusercontent.com",
-      clientIds: ["sts.amazonaws.com"],
-    });
+    // Import the existing OIDC provider (only one per URL is allowed per account)
+    const oidcProvider = iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
+      this,
+      "GithubProvider",
+      `arn:aws:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`
+    );
 
     const deployRole = new iam.Role(this, "DeployRole", {
       roleName: "cooking-github-deploy",
