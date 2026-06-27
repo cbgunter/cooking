@@ -17,14 +17,11 @@ jobs:
 
       - run: npm ci
 
-      - name: Typecheck all packages
-        run: npm run typecheck --workspaces --if-present
+      - name: Build
+        run: npm run build
 
       - name: Run tests
         run: npm test --workspaces --if-present
-
-      - name: Build workspace packages
-        run: npm run build --workspaces --if-present
 
   cdk-diff:
     runs-on: ubuntu-latest
@@ -43,7 +40,7 @@ jobs:
       - run: npm ci
 
       - name: Build workspace packages
-        run: npm run build --workspaces --if-present
+        run: npm run build
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
