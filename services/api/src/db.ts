@@ -147,6 +147,20 @@ export async function getHighlyRatedRecipeIds(minStars = 4): Promise<string[]> {
   ];
 }
 
+export async function getAllWeeks(): Promise<Week[]> {
+  const result = await ddb.send(
+    new ScanCommand({
+      TableName: TABLE_NAME,
+      FilterExpression: "begins_with(PK, :prefix) AND SK = :sk",
+      ExpressionAttributeValues: { ":prefix": "WEEK#", ":sk": "META" },
+    })
+  );
+  const weeks = ((result.Items ?? []) as Record<string, unknown>[]).map(
+    ({ PK: _pk, SK: _sk, ...rest }) => rest as unknown as Week
+  );
+  return weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+}
+
 // ── Ratings ───────────────────────────────────────────────────────────────────
 
 export async function saveRating(rating: Rating): Promise<void> {

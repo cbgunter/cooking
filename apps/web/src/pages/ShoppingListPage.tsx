@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { ShoppingList, IngredientCategory } from "@cooking/core";
 import * as api from "../api.js";
 
@@ -27,18 +28,22 @@ const CATEGORY_LABELS: Record<IngredientCategory, string> = {
 };
 
 export default function ShoppingListPage() {
+  const [searchParams] = useSearchParams();
+  const weekParam = searchParams.get("week");
   const [list, setList] = useState<ShoppingList | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api
-      .getShoppingList()
+    const fetch = weekParam
+      ? api.getShoppingListForWeek(weekParam)
+      : api.getShoppingList();
+    fetch
       .then(setList)
       .catch(() => setError("No shopping list yet — confirm your meals first."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [weekParam]);
 
   const toggle = (name: string) => {
     setChecked((prev) => {

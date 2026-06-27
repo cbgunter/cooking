@@ -33,7 +33,36 @@ export const savePreferences = (prefs: HouseholdPreferences) =>
     body: JSON.stringify(prefs),
   });
 
-// ── Current week ──────────────────────────────────────────────────────────
+// ── All weeks ─────────────────────────────────────────────────────────────
+
+export const getWeeks = () =>
+  req<{ weeks: Array<{ week: Week; selectedRecipes: Recipe[] }> }>("/weeks");
+
+// ── Week by start date ────────────────────────────────────────────────────
+
+export const getWeekByStart = (weekStart: string) =>
+  req<{ week: Week | null; candidates: Recipe[] }>(`/weeks/${weekStart}`);
+
+export const triggerGenerateForWeek = (weekStart: string) =>
+  req<{ week: Week }>(`/weeks/${weekStart}/generate`, { method: "POST" });
+
+export const selectMealsForWeek = (
+  weekStart: string,
+  selections: WeekSelection[],
+  daysPerWeek?: number
+) =>
+  req<{ week: Week }>(`/weeks/${weekStart}/select`, {
+    method: "POST",
+    body: JSON.stringify({ selections, daysPerWeek }),
+  });
+
+export const skipWeekByStart = (weekStart: string) =>
+  req<{ week: Week }>(`/weeks/${weekStart}/skip`, { method: "POST" });
+
+export const getShoppingListForWeek = (weekStart: string) =>
+  req<ShoppingList>(`/weeks/${weekStart}/shopping-list`);
+
+// ── Current week (kept for legacy compat) ─────────────────────────────────
 
 export const getCurrentWeek = () =>
   req<{ week: Week | null; candidates: Recipe[] }>("/weeks/current");
@@ -57,16 +86,25 @@ export const getShoppingList = () =>
 
 export const getRecipe = (id: string) => req<Recipe>(`/recipes/${id}`);
 
-export const markCooked = (id: string) =>
-  req<{ week: Week }>(`/recipes/${id}/cooked`, { method: "POST" });
+export const markCooked = (id: string, weekStart?: string) =>
+  req<{ week: Week }>(`/recipes/${id}/cooked`, {
+    method: "POST",
+    body: JSON.stringify(weekStart ? { weekStart } : {}),
+  });
 
 export const submitRating = (
   id: string,
   stars: 1 | 2 | 3 | 4 | 5,
   makeAgain: boolean,
-  notes?: string
+  notes?: string,
+  weekStart?: string
 ) =>
   req(`/recipes/${id}/rating`, {
     method: "POST",
-    body: JSON.stringify({ stars, makeAgain, ...(notes ? { notes } : {}) }),
+    body: JSON.stringify({
+      stars,
+      makeAgain,
+      ...(notes ? { notes } : {}),
+      ...(weekStart ? { weekStart } : {}),
+    }),
   });

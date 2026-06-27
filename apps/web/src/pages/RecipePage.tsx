@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import type { Recipe } from "@cooking/core";
 import * as api from "../api.js";
 
 export default function RecipePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const weekStart = (location.state as { weekStart?: string } | null)?.weekStart;
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [step, setStep] = useState(0);
   const [cooked, setCooked] = useState(false);
@@ -30,7 +32,7 @@ export default function RecipePage() {
     if (!id) return;
     setSubmitting(true);
     try {
-      await api.markCooked(id);
+      await api.markCooked(id, weekStart);
       setCooked(true);
       setShowRating(true);
     } finally {
@@ -42,8 +44,8 @@ export default function RecipePage() {
     if (!id || stars === 0) return;
     setSubmitting(true);
     try {
-      await api.submitRating(id, stars, makeAgain, notes || undefined);
-      navigate("/week");
+      await api.submitRating(id, stars, makeAgain, notes || undefined, weekStart);
+      navigate(weekStart ? `/weeks/${weekStart}` : "/week");
     } finally {
       setSubmitting(false);
     }
