@@ -136,6 +136,27 @@ export class ApiStack extends cdk.Stack {
     const proxy = api.root.addProxy({ anyMethod: false });
     proxy.addMethod("ANY", integration, methodOptions);
 
+    // CORS headers on gateway-level error responses (e.g. 401 from Cognito authorizer)
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "'*'",
+      "Access-Control-Allow-Headers": "'Authorization,Content-Type'",
+    };
+    new apigateway.GatewayResponse(this, "Unauthorized", {
+      restApi: api,
+      type: apigateway.ResponseType.UNAUTHORIZED,
+      responseHeaders: corsHeaders,
+    });
+    new apigateway.GatewayResponse(this, "Default4xx", {
+      restApi: api,
+      type: apigateway.ResponseType.DEFAULT_4XX,
+      responseHeaders: corsHeaders,
+    });
+    new apigateway.GatewayResponse(this, "Default5xx", {
+      restApi: api,
+      type: apigateway.ResponseType.DEFAULT_5XX,
+      responseHeaders: corsHeaders,
+    });
+
     this.apiUrl = api.url;
 
     // ── Outputs ───────────────────────────────────────────────────────────

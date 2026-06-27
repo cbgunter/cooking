@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { handle } from "hono/aws-lambda";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { buildShoppingList, DEFAULT_PREFERENCES } from "@cooking/core";
@@ -6,6 +7,7 @@ import type { Week, WeekSelection } from "@cooking/core";
 import * as db from "./db.js";
 
 const app = new Hono();
+app.use("*", cors());
 const lambda = new LambdaClient({});
 
 // ── Helpers ────────────────────────────────────────────────────────────────
