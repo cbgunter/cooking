@@ -1,0 +1,24 @@
+{
+  "name": "@cooking/infra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "bin/app.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy --all --require-approval never"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.148.0",
+    "constructs": "^10.3.0",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.148.0",
+    "typescript": "^5.4.5"
+  }
+}

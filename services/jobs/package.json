@@ -1,0 +1,21 @@
+{
+  "name": "@cooking/jobs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-ses": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@cooking/ai": "*",
+    "@cooking/core": "*"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.141",
+    "typescript": "^5.4.5"
+  }
+}

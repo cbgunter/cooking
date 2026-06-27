@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Typecheck all packages
+        run: npm run typecheck --workspaces --if-present
+
+      - name: Run tests
+        run: npm test --workspaces --if-present
+
+      - name: Build workspace packages
+        run: npm run build --workspaces --if-present
+
+  cdk-diff:
+    runs-on: ubuntu-latest
+    needs: build-test
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Build workspace packages
+        run: npm run build --workspaces --if-present
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::466850516129:role/cooking-github-deploy
+          aws-region: us-east-1
+
+      - name: CDK diff
+        working-directory: infra
+        run: npx cdk diff --all

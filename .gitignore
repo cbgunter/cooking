@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.*
+*.js.map
+*.d.ts.map
+cdk.out/
+.cdk.staging/
+*.tsbuildinfo
+coverage/
+.DS_Store

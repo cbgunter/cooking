@@ -1,0 +1,93 @@
+/** JSON Schema for the Claude tool that returns a generated recipe. */
+export const RECIPE_TOOL_SCHEMA = {
+  name: "add_recipe",
+  description:
+    "Add a generated recipe to the weekly menu. Called once per recipe.",
+  input_schema: {
+    type: "object" as const,
+    required: [
+      "title",
+      "description",
+      "mealType",
+      "cuisine",
+      "tags",
+      "equipment",
+      "cookStyle",
+      "servings",
+      "prepMinutes",
+      "cookMinutes",
+      "ingredients",
+      "steps",
+      "nutrition",
+      "costPerServing",
+    ],
+    properties: {
+      title: { type: "string" },
+      description: { type: "string" },
+      mealType: { type: "string", enum: ["breakfast", "lunch", "dinner"] },
+      cuisine: { type: "string" },
+      tags: { type: "array", items: { type: "string" } },
+      equipment: {
+        type: "array",
+        items: {
+          type: "string",
+          enum: [
+            "stove",
+            "oven",
+            "grill",
+            "sous_vide",
+            "crockpot",
+            "dutch_oven",
+            "microwave",
+            "air_fryer",
+          ],
+        },
+      },
+      cookStyle: { type: "string", enum: ["prep_ahead", "cook_fresh"] },
+      servings: { type: "number" },
+      prepMinutes: { type: "number" },
+      cookMinutes: { type: "number" },
+      ingredients: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["name", "quantity", "unit", "category"],
+          properties: {
+            name: { type: "string" },
+            quantity: { type: "number" },
+            unit: { type: "string" },
+            category: {
+              type: "string",
+              enum: [
+                "produce",
+                "protein",
+                "dairy",
+                "grains",
+                "pantry",
+                "frozen",
+                "condiments",
+                "beverages",
+                "other",
+              ],
+            },
+            shareable: { type: "boolean" },
+          },
+        },
+      },
+      steps: { type: "array", items: { type: "string" } },
+      nutrition: {
+        type: "object",
+        required: ["calories", "sodiumMg", "proteinG", "carbsG", "fatG"],
+        properties: {
+          calories: { type: "number" },
+          sodiumMg: { type: "number" },
+          proteinG: { type: "number" },
+          carbsG: { type: "number" },
+          fatG: { type: "number" },
+        },
+      },
+      costPerServing: { type: "number" },
+      reuseNotes: { type: "string" },
+    },
+  },
+};

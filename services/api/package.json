@@ -1,0 +1,25 @@
+{
+  "name": "@cooking/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/handler.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-lambda": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@cooking/core": "*",
+    "@cooking/ai": "*",
+    "hono": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.141",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
