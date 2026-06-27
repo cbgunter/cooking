@@ -1,7 +1,22 @@
 import type { Handler } from "aws-lambda";
+import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { generateMenuCandidates } from "@cooking/ai";
 import { DEFAULT_PREFERENCES } from "@cooking/core";
 import * as db from "./db.js";
+
+const smClient = new SecretsManagerClient({});
+
+async function getAnthropicKey(): Promise<string> {
+  const arn = process.env["ANTHROPIC_SECRET_ARN"];
+  if (arn) {
+    const res = await smClient.send(new GetSecretValueCommand({ SecretId: arn }));
+    if (res.SecretString) return res.SecretString;
+  }
+  // Fallback: plain env var (local dev or direct override)
+  const key = process.env["ANTHROPIC_API_KEY"];
+  if (key) return key;
+  throw new Error("No Anthropic API key — set ANTHROPIC_SECRET_ARN or ANTHROPIC_API_KEY");
+}
 
 interface GenerateEvent {
   weekStart?: string;
@@ -10,8 +25,7 @@ interface GenerateEvent {
 /** Lambda handler: generates recipe candidates and stores them in DynamoDB. */
 export const handler: Handler<GenerateEvent> = async (event) => {
   const weekStart = event.weekStart ?? upcomingMondayISO();
-  const apiKey = process.env["ANTHROPIC_API_KEY"];
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY env var not set");
+  const apiKey = await getAnthropicKey();
 
   const [prefs, recentRecipes, highlyRatedRecipes, ratings, week] = await Promise.all([
     db.getPreferences(),

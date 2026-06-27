@@ -85,11 +85,12 @@ export class ApiStack extends cdk.Stack {
       bundling,
       environment: {
         TABLE_NAME: this.table.tableName,
-        ANTHROPIC_API_KEY: this.anthropicSecret.secretValue.unsafeUnwrap(),
+        ANTHROPIC_SECRET_ARN: this.anthropicSecret.secretArn,
       },
     });
 
     this.table.grantReadWriteData(generateFn);
+    this.anthropicSecret.grantRead(generateFn);
     this.generateLambdaArn = generateFn.functionArn;
 
     // ── API Lambda ────────────────────────────────────────────────────────
