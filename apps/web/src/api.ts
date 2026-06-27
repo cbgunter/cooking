@@ -7,7 +7,7 @@ import type {
 } from "@cooking/core";
 import { getToken } from "./auth.js";
 
-const BASE = (import.meta.env["VITE_API_URL"] as string | undefined) ?? "";
+const BASE = ((import.meta.env["VITE_API_URL"] as string | undefined) ?? "").replace(/\/$/, "");
 
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();

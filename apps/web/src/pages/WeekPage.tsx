@@ -13,6 +13,7 @@ export default function WeekPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export default function WeekPage() {
 
   const handleGenerate = async () => {
     setGenerating(true);
+    setError(null);
     try {
       const { week: w } = await api.triggerGenerate();
       setWeek(w);
@@ -42,8 +44,9 @@ export default function WeekPage() {
           setGenerating(false);
         }
       }, 5000);
-    } catch {
+    } catch (e) {
       setGenerating(false);
+      setError(e instanceof Error ? e.message : "Something went wrong");
     }
   };
 
@@ -79,9 +82,16 @@ export default function WeekPage() {
 
   if (loading) return <PageShell title="This week"><Spinner /></PageShell>;
 
+  const errorBanner = error && (
+    <div style={{ margin: "0 16px 16px", padding: "12px 16px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, color: "#991b1b", fontSize: "0.85rem" }}>
+      {error}
+    </div>
+  );
+
   if (!week || week.status === "done" || week.status === "skipped") {
     return (
       <PageShell title="This week">
+        {errorBanner}
         <div style={{ textAlign: "center", padding: "48px 16px" }}>
           <p className="text-muted" style={{ marginBottom: 20 }}>
             {week?.status === "skipped"
