@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { label: "Choose", path: "/choose" },
   { label: "Shop", path: "/shop" },
   { label: "Cook", path: "/cook" },
+  { label: "Eat", path: "/eat" },
   { label: "Settings", path: "/preferences" },
 ];
 

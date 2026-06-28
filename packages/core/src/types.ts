@@ -111,6 +111,7 @@ export interface Rating {
   stars: 1 | 2 | 3 | 4 | 5;
   notes?: string;
   makeAgain: boolean;
+  ratedBy?: string;
   createdAt: string;
 }
 

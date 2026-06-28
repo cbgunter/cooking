@@ -310,18 +310,49 @@ app.post("/recipes/:id/rating", async (c) => {
   const weekStart = body.weekStart ?? (await db.getCurrentWeekStart());
   if (!weekStart) return c.json({ error: "no current week" }, 404);
 
+  const ratedBy = getUserEmail(c.req.header("Authorization")) ?? undefined;
   const rating = {
-    id: `${recipeId}#${weekStart}`,
+    id: ratedBy ? `${recipeId}#${weekStart}#${ratedBy}` : `${recipeId}#${weekStart}`,
     recipeId,
     weekId: weekStart,
     stars: body.stars,
     makeAgain: body.makeAgain,
     createdAt: new Date().toISOString(),
     ...(body.notes !== undefined ? { notes: body.notes } : {}),
+    ...(ratedBy !== undefined ? { ratedBy } : {}),
   };
 
   await db.saveRating(rating);
   return c.json({ rating }, 201);
+});
+
+app.get("/eat", async (c) => {
+  const allWeeks = await db.getAllWeeks();
+  const cookedWeeks = allWeeks
+    .filter((w) => w.cookedRecipeIds.length > 0)
+    .sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+
+  const MEAL_ORDER: Record<string, number> = { breakfast: 0, lunch: 1, dinner: 2 };
+
+  const meals: Array<{ recipe: import("@cooking/core").Recipe; weekStart: string; ratings: import("@cooking/core").Rating[] }> = [];
+  for (const week of cookedWeeks) {
+    const [recipes, ratings] = await Promise.all([
+      db.getCandidateRecipes(week.cookedRecipeIds),
+      db.getRatingsForWeek(week.weekStart),
+    ]);
+    const sorted = recipes.sort(
+      (a, b) => (MEAL_ORDER[a.mealType] ?? 99) - (MEAL_ORDER[b.mealType] ?? 99)
+    );
+    for (const recipe of sorted) {
+      meals.push({
+        recipe,
+        weekStart: week.weekStart,
+        ratings: ratings.filter((r) => r.recipeId === recipe.id),
+      });
+    }
+  }
+
+  return c.json({ meals });
 });
 
 export const handler = handle(app);

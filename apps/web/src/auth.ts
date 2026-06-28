@@ -58,10 +58,14 @@ const NAME_MAP: Record<string, string> = {
   "lmalava87@gmail.com": "Luisa",
 };
 
+export function getNameForEmail(email: string): string {
+  return NAME_MAP[email] ?? email.split("@")[0] ?? email;
+}
+
 export function getDisplayName(): string {
   const email = getCurrentUserEmail();
   if (!email) return "there";
-  return NAME_MAP[email] ?? email.split("@")[0] ?? "there";
+  return getNameForEmail(email);
 }
 
 export function signOut(): void {

@@ -1,11 +1,18 @@
 import type {
   HouseholdPreferences,
   Recipe,
+  Rating,
   Week,
   ShoppingList,
   WeekSelection,
   MealCounts,
 } from "@cooking/core";
+
+export type EatMeal = {
+  recipe: Recipe;
+  weekStart: string;
+  ratings: Rating[];
+};
 import { getToken } from "./auth.js";
 
 const BASE = ((import.meta.env["VITE_API_URL"] as string | undefined) ?? "").replace(/\/$/, "");
@@ -95,6 +102,8 @@ export const getShoppingList = () =>
   req<ShoppingList>("/weeks/current/shopping-list");
 
 // ── Recipes ────────────────────────────────────────────────────────────────
+
+export const getEatMeals = () => req<{ meals: EatMeal[] }>("/eat");
 
 export const getRecipe = (id: string) => req<Recipe>(`/recipes/${id}`);
 

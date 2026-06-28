@@ -11,6 +11,7 @@ import PreferencesPage from "./pages/PreferencesPage.js";
 import ShopPage from "./pages/ShopPage.js";
 import CookPage from "./pages/CookPage.js";
 import CookWeekPage from "./pages/CookWeekPage.js";
+import EatPage from "./pages/EatPage.js";
 
 export default function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/shopping" element={<ShoppingListPage />} />
           <Route path="/cook" element={<CookPage />} />
           <Route path="/cook/:weekStart" element={<CookWeekPage />} />
+          <Route path="/eat" element={<EatPage />} />
           <Route path="/recipes/:id" element={<RecipePage />} />
           <Route path="/preferences" element={<PreferencesPage />} />
           <Route path="/week" element={<Navigate to="/choose" replace />} />

@@ -164,15 +164,28 @@ export async function getAllWeeks(): Promise<Week[]> {
 // ── Ratings ───────────────────────────────────────────────────────────────────
 
 export async function saveRating(rating: Rating): Promise<void> {
+  const sk = rating.ratedBy
+    ? `RATING#${rating.weekId}#${rating.ratedBy}`
+    : `RATING#${rating.weekId}`;
   await ddb.send(
     new PutCommand({
       TableName: TABLE_NAME,
-      Item: {
-        PK: `RECIPE#${rating.recipeId}`,
-        SK: `RATING#${rating.weekId}`,
-        ...rating,
-      },
+      Item: { PK: `RECIPE#${rating.recipeId}`, SK: sk, ...rating },
     })
+  );
+}
+
+export async function getRatingsForWeek(weekStart: string): Promise<Rating[]> {
+  const result = await ddb.send(
+    new ScanCommand({
+      TableName: TABLE_NAME,
+      FilterExpression: "begins_with(#SK, :prefix)",
+      ExpressionAttributeNames: { "#SK": "SK" },
+      ExpressionAttributeValues: { ":prefix": `RATING#${weekStart}` },
+    })
+  );
+  return ((result.Items ?? []) as Record<string, unknown>[]).map(
+    ({ PK: _pk, SK: _sk, ...rest }) => rest as unknown as Rating
   );
 }
 
