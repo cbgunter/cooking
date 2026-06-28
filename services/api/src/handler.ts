@@ -21,7 +21,7 @@ function upcomingMondayISO(): string {
   return monday.toISOString().split("T")[0] as string;
 }
 
-async function generateWeek(weekStart: string): Promise<Week> {
+async function generateWeek(weekStart: string, daysPerWeek?: number): Promise<Week> {
   const now = new Date().toISOString();
   const prefs = await db.getPreferences();
   const existing = await db.getWeek(weekStart);
@@ -30,7 +30,7 @@ async function generateWeek(weekStart: string): Promise<Week> {
     id: weekStart,
     weekStart,
     status: "pending",
-    daysPerWeek: prefs?.defaultDaysPerWeek ?? DEFAULT_PREFERENCES.defaultDaysPerWeek,
+    daysPerWeek: daysPerWeek ?? existing?.daysPerWeek ?? prefs?.defaultDaysPerWeek ?? DEFAULT_PREFERENCES.defaultDaysPerWeek,
     candidateRecipeIds: existing?.candidateRecipeIds ?? [],
     selections: existing?.selections ?? [],
     cookedRecipeIds: existing?.cookedRecipeIds ?? [],
@@ -96,7 +96,8 @@ app.get("/weeks/current", async (c) => {
 });
 
 app.post("/weeks/current/generate", async (c) => {
-  const week = await generateWeek(upcomingMondayISO());
+  const body = await c.req.json<{ daysPerWeek?: number }>().catch(() => ({}));
+  const week = await generateWeek(upcomingMondayISO(), body.daysPerWeek);
   return c.json({ week }, 202);
 });
 
@@ -150,7 +151,8 @@ app.get("/weeks/:weekStart", async (c) => {
 });
 
 app.post("/weeks/:weekStart/generate", async (c) => {
-  const week = await generateWeek(c.req.param("weekStart"));
+  const body = await c.req.json<{ daysPerWeek?: number }>().catch(() => ({}));
+  const week = await generateWeek(c.req.param("weekStart"), body.daysPerWeek);
   return c.json({ week }, 202);
 });
 
@@ -172,9 +174,16 @@ app.post("/weeks/:weekStart/select", async (c) => {
 
 app.post("/weeks/:weekStart/skip", async (c) => {
   const weekStart = c.req.param("weekStart");
-  const week = await db.getWeek(weekStart);
-  if (!week) return c.json({ error: "week not found" }, 404);
-  const updated = { ...week, status: "skipped" as const, updatedAt: new Date().toISOString() };
+  const now = new Date().toISOString();
+  const existing = await db.getWeek(weekStart);
+  const prefs = await db.getPreferences();
+  const base = existing ?? {
+    id: weekStart, weekStart, status: "pending" as const,
+    daysPerWeek: prefs?.defaultDaysPerWeek ?? DEFAULT_PREFERENCES.defaultDaysPerWeek,
+    candidateRecipeIds: [], selections: [], cookedRecipeIds: [],
+    createdAt: now, updatedAt: now,
+  };
+  const updated = { ...base, status: "skipped" as const, updatedAt: now };
   await db.saveWeek(updated);
   return c.json({ week: updated });
 });

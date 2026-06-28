@@ -3,6 +3,15 @@ import { useNavigate } from "react-router-dom";
 import type { Recipe, Week } from "@cooking/core";
 import * as api from "../api.js";
 
+// Use local date parts to avoid UTC offset shifting the date back one day
+function toLocalISO(d: Date): string {
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 function getUpcomingMondays(count = 4): string[] {
   const today = new Date();
   const day = today.getDay();
@@ -13,7 +22,7 @@ function getUpcomingMondays(count = 4): string[] {
   return Array.from({ length: count }, (_, i) => {
     const d = new Date(base);
     d.setDate(base.getDate() + i * 7);
-    return d.toISOString().split("T")[0] as string;
+    return toLocalISO(d);
   });
 }
 
@@ -34,11 +43,12 @@ const MEAL_COLORS: Record<string, string> = {
 
 const STATUS_BADGE: Record<string, { bg: string; color: string; label: string }> = {
   pending:   { bg: "#F3F4F6", color: "#6B7280", label: "Generating…" },
-  selecting: { bg: "#FEF3C7", color: "#92400E", label: "Choosing" },
+  selecting: { bg: "#FEF3C7", color: "#92400E", label: "Choose meals" },
   shopping:  { bg: "#DBEAFE", color: "#1E40AF", label: "Ready to shop" },
   cooking:   { bg: "#D1FAE5", color: "#065F46", label: "Cooking" },
   done:      { bg: "#D1FAE5", color: "#065F46", label: "Complete" },
   skipped:   { bg: "#F3F4F6", color: "#6B7280", label: "Skipped" },
+  error:     { bg: "#FEE2E2", color: "#991B1B", label: "Failed" },
 };
 
 interface WeekEntry {
@@ -55,7 +65,6 @@ export default function WeekPage() {
   );
   const [loading, setLoading] = useState(true);
   const [generatingFor, setGeneratingFor] = useState<Set<string>>(new Set());
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const navigate = useNavigate();
 
   const loadWeeks = useCallback(async () => {
@@ -74,7 +83,6 @@ export default function WeekPage() {
     loadWeeks().finally(() => setLoading(false));
   }, [loadWeeks]);
 
-  // Poll while any week is pending
   useEffect(() => {
     const hasPending = entries.some((e) => e.week?.status === "pending") || generatingFor.size > 0;
     if (!hasPending) return;
@@ -82,7 +90,6 @@ export default function WeekPage() {
     return () => clearInterval(id);
   }, [entries, generatingFor, loadWeeks]);
 
-  // Drop generating flag once week leaves pending
   useEffect(() => {
     setGeneratingFor((prev) => {
       const next = new Set(prev);
@@ -94,15 +101,23 @@ export default function WeekPage() {
     });
   }, [entries]);
 
-  const handleGenerate = async (weekStart: string) => {
+  const handleGenerate = async (weekStart: string, daysPerWeek: number) => {
     setGeneratingFor((p) => new Set(p).add(weekStart));
-    setErrors((e) => { const n = { ...e }; delete n[weekStart]; return n; });
     try {
-      await api.triggerGenerateForWeek(weekStart);
+      await api.triggerGenerateForWeek(weekStart, daysPerWeek);
       await loadWeeks();
     } catch (err) {
       setGeneratingFor((p) => { const n = new Set(p); n.delete(weekStart); return n; });
-      setErrors((e) => ({ ...e, [weekStart]: err instanceof Error ? err.message : "Something went wrong" }));
+      alert(err instanceof Error ? err.message : "Something went wrong");
+    }
+  };
+
+  const handleSkip = async (weekStart: string) => {
+    try {
+      await api.skipWeekByStart(weekStart);
+      await loadWeeks();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Something went wrong");
     }
   };
 
@@ -125,8 +140,8 @@ export default function WeekPage() {
             key={entry.weekStart}
             entry={entry}
             generating={generatingFor.has(entry.weekStart)}
-            error={errors[entry.weekStart]}
-            onGenerate={() => handleGenerate(entry.weekStart)}
+            onGenerate={(days) => handleGenerate(entry.weekStart, days)}
+            onSkip={() => handleSkip(entry.weekStart)}
             onOpen={() => navigate(`/weeks/${entry.weekStart}`)}
           />
         ))}
@@ -138,25 +153,33 @@ export default function WeekPage() {
 function WeekCard({
   entry,
   generating,
-  error,
   onGenerate,
+  onSkip,
   onOpen,
 }: {
   entry: WeekEntry;
   generating: boolean;
-  error?: string;
-  onGenerate: () => void;
+  onGenerate: (days: number) => void;
+  onSkip: () => void;
   onOpen: () => void;
 }) {
   const { weekStart, week, selectedRecipes } = entry;
+  const [picking, setPicking] = useState(false);
+  const [days, setDays] = useState(5);
+
   const label = formatWeekDate(weekStart);
   const isPending = generating || week?.status === "pending";
+  const isEmpty = !week || week.status === "done" || week.status === "skipped" || week.status === "error";
   const badge = week?.status ? STATUS_BADGE[week.status] : null;
-  const isEmpty = !week || week.status === "done" || week.status === "skipped";
+
+  const confirmGenerate = () => {
+    setPicking(false);
+    onGenerate(days);
+  };
 
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-      {/* Header row */}
+      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -192,7 +215,7 @@ function WeekCard({
               Chef Claude is crafting your menu…
             </span>
           </div>
-        ) : selectedRecipes.length > 0 ? (
+        ) : selectedRecipes.length > 0 && !picking ? (
           <div
             style={{
               display: "flex",
@@ -230,33 +253,78 @@ function WeekCard({
                 >
                   {r.title}
                 </span>
-                <span
-                  style={{
-                    fontSize: "0.6rem",
-                    color: "rgba(0,0,0,0.4)",
-                    textTransform: "capitalize",
-                  }}
-                >
+                <span style={{ fontSize: "0.6rem", color: "rgba(0,0,0,0.4)", textTransform: "capitalize" }}>
                   {r.mealType}
                 </span>
               </div>
             ))}
           </div>
-        ) : isEmpty ? (
+        ) : isEmpty && !picking ? (
           <p style={{ color: "var(--slate-light)", fontSize: "0.85rem", margin: "4px 0 10px" }}>
-            {week?.status === "skipped" ? "You skipped this week." : "No meals planned yet."}
+            {week?.status === "skipped"
+              ? "You skipped this week."
+              : week?.status === "error"
+              ? "Generation failed — try again."
+              : "No meals planned yet."}
           </p>
         ) : null}
 
-        {error && (
-          <p style={{ color: "#991b1b", fontSize: "0.8rem", marginBottom: 8 }}>{error}</p>
+        {/* Pre-generate picker */}
+        {picking && !isPending && (
+          <div style={{ paddingBottom: 4 }}>
+            <p style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: 10, color: "var(--slate)" }}>
+              How many meals this week?
+            </p>
+            <div className="row gap-2" style={{ marginBottom: 14, flexWrap: "wrap" }}>
+              {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setDays(n)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    border: `2px solid ${days === n ? "var(--clay)" : "var(--border)"}`,
+                    background: days === n ? "var(--clay)" : "transparent",
+                    color: days === n ? "#fff" : "var(--slate)",
+                    fontWeight: 700,
+                    fontSize: "0.9rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <div className="stack gap-2">
+              <button className="btn btn-primary" style={{ width: "100%" }} onClick={confirmGenerate}>
+                Generate {days} meal{days !== 1 ? "s" : ""}
+              </button>
+              <div className="row gap-2">
+                <button
+                  className="btn btn-ghost text-sm"
+                  style={{ flex: 1 }}
+                  onClick={() => { onSkip(); setPicking(false); }}
+                >
+                  Skip this week
+                </button>
+                <button
+                  className="btn btn-ghost text-sm"
+                  style={{ flex: 1 }}
+                  onClick={() => setPicking(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* Action button */}
-        {!isPending && (
+        {/* Action buttons */}
+        {!isPending && !picking && (
           <>
             {isEmpty && (
-              <button className="btn btn-primary" style={{ width: "100%" }} onClick={onGenerate}>
+              <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => setPicking(true)}>
                 Generate menu
               </button>
             )}

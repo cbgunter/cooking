@@ -43,8 +43,11 @@ export const getWeeks = () =>
 export const getWeekByStart = (weekStart: string) =>
   req<{ week: Week | null; candidates: Recipe[] }>(`/weeks/${weekStart}`);
 
-export const triggerGenerateForWeek = (weekStart: string) =>
-  req<{ week: Week }>(`/weeks/${weekStart}/generate`, { method: "POST" });
+export const triggerGenerateForWeek = (weekStart: string, daysPerWeek?: number) =>
+  req<{ week: Week }>(`/weeks/${weekStart}/generate`, {
+    method: "POST",
+    body: JSON.stringify(daysPerWeek ? { daysPerWeek } : {}),
+  });
 
 export const selectMealsForWeek = (
   weekStart: string,

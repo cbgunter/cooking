@@ -25,6 +25,19 @@ interface GenerateEvent {
 /** Lambda handler: generates recipe candidates and stores them in DynamoDB. */
 export const handler: Handler<GenerateEvent> = async (event) => {
   const weekStart = event.weekStart ?? upcomingMondayISO();
+  try {
+    await run(weekStart);
+  } catch (err) {
+    console.error(JSON.stringify({ weekStart, error: String(err) }));
+    const failed = await db.getWeek(weekStart);
+    if (failed) {
+      await db.saveWeek({ ...failed, status: "error", updatedAt: new Date().toISOString() });
+    }
+    throw err;
+  }
+};
+
+async function run(weekStart: string) {
   const apiKey = await getAnthropicKey();
 
   const [prefs, recentRecipes, highlyRatedRecipes, ratings, week] = await Promise.all([
@@ -69,7 +82,7 @@ export const handler: Handler<GenerateEvent> = async (event) => {
     createdAt: week?.createdAt ?? now,
     updatedAt: now,
   });
-};
+}
 
 function upcomingMondayISO(): string {
   const now = new Date();

@@ -68,7 +68,8 @@ export type WeekStatus =
   | "shopping"
   | "cooking"
   | "done"
-  | "skipped";
+  | "skipped"
+  | "error";
 
 export interface WeekSelection {
   recipeId: string;
