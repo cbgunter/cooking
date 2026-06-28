@@ -196,9 +196,15 @@ function WeekCard({
   const isEmpty = !week || week.status === "done" || week.status === "skipped" || week.status === "error";
   const isSkipped = week?.status === "skipped";
   const isError = week?.status === "error";
+  const isRegenerate = isSelecting && picking;
 
   const candidateCount = week?.candidateRecipeIds?.length ?? 0;
   const totalMeals = counts.breakfast + counts.lunch + counts.dinner;
+
+  const openPicker = (prefill?: MealCounts) => {
+    if (prefill) setCounts(prefill);
+    setPicking(true);
+  };
 
   const confirmGenerate = () => {
     setPicking(false);
@@ -359,7 +365,7 @@ function WeekCard({
         {picking && !isPending && (
           <div style={{ marginBottom: 4 }}>
             <p style={{ fontSize: "0.82rem", color: "var(--stone)", marginBottom: 14 }}>
-              How many meals per type?
+              {isRegenerate ? "Adjust counts and regenerate:" : "How many meals per type?"}
             </p>
             {(["breakfast", "lunch", "dinner"] as const).map((type) => (
               <div
@@ -410,7 +416,7 @@ function WeekCard({
                 onClick={confirmGenerate}
                 disabled={totalMeals === 0}
               >
-                Generate {totalMeals} meal{totalMeals !== 1 ? "s" : ""}
+                {isRegenerate ? "Re-generate" : "Generate"} {totalMeals} meal{totalMeals !== 1 ? "s" : ""}
               </button>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
@@ -448,6 +454,16 @@ function WeekCard({
             {isActive && (
               <button className="btn btn-outline" style={{ flex: 1 }} onClick={onOpen}>
                 View meals
+              </button>
+            )}
+            {isSelecting && (
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: "0.82rem", padding: "12px 14px" }}
+                title="Regenerate with new counts"
+                onClick={() => openPicker(week?.mealCounts ?? { breakfast: 1, lunch: 1, dinner: 3 })}
+              >
+                ↺
               </button>
             )}
             {isSelecting && (

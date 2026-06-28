@@ -176,6 +176,12 @@ export default function WeekDetailPage() {
 
   // Selecting view (or editing)
   if (week?.status === "selecting" || editing) {
+    const presentTypes = new Set(candidates.map((r) => r.mealType));
+    const expectedTypes = MEAL_ORDER.filter((t) =>
+      week?.mealCounts ? (week.mealCounts[t] ?? 0) > 0 : true
+    );
+    const missingTypes = expectedTypes.filter((t) => !presentTypes.has(t));
+
     const grouped = MEAL_ORDER.map((type) => ({
       type,
       recipes: candidates.filter((r) => r.mealType === type),
@@ -186,6 +192,40 @@ export default function WeekDetailPage() {
         title={`Week of ${label}`}
         onBack={editing ? () => setEditing(false) : back}
       >
+        {/* Missing meal type notice */}
+        {missingTypes.length > 0 && !editing && (
+          <div
+            style={{
+              margin: "0 16px 16px",
+              padding: "12px 14px",
+              background: "#FFF8F0",
+              border: "1px solid #E8CEBC",
+              borderRadius: 10,
+              fontSize: "0.83rem",
+              color: "#7A4A28",
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>Missing {missingTypes.join(" & ")} options.</strong> This week was generated before the latest update.{" "}
+            <button
+              onClick={back}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--apricot-deep)",
+                fontWeight: 600,
+                textDecoration: "underline",
+                fontSize: "inherit",
+                padding: 0,
+              }}
+            >
+              Go back and use ↺ to regenerate
+            </button>{" "}
+            with breakfast, lunch, and dinner.
+          </div>
+        )}
+
         <div style={{ padding: "0 16px" }}>
           {grouped.map(({ type, recipes }) => (
             <section key={type} style={{ marginBottom: 24 }}>
