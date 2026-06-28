@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
-import type { Recipe, HouseholdPreferences, Rating, MealCounts } from "@cooking/core";
+import type { Recipe, HouseholdPreferences, Rating, MealCounts, MealType } from "@cooking/core";
 import { passesConstraints } from "@cooking/core";
 import { RECIPE_TOOL_SCHEMA } from "./schema.js";
 import {
@@ -15,7 +15,7 @@ export interface GenerateMenuOptions {
   highlyRatedRecipes?: Recipe[];
   dislikedRecipes?: Array<{ title: string; notes?: string }>;
   ratings?: Rating[];
-  /** Per-type user day counts; candidates generated = 2× each. */
+  /** Per-type user day counts; see buildTargetCounts for candidate counts. */
   mealCounts: MealCounts;
   weekStart: string;
   apiKey: string;
@@ -29,6 +29,7 @@ export interface GenerateMenuResult {
 }
 
 const MAX_TOPUP_ROUNDS = 2;
+const MEAL_TYPES: MealType[] = ["breakfast", "lunch", "dinner"];
 
 export async function generateMenuCandidates(
   opts: GenerateMenuOptions
@@ -48,48 +49,84 @@ export async function generateMenuCandidates(
   const client = new Anthropic({ apiKey });
   const targets = buildTargetCounts(mealCounts);
 
-  const accepted: Recipe[] = [];
-  let totalGenerated = 0;
-  let totalRejected = 0;
-
-  // --- Initial round ---
-  const firstRound = await runRound(client, model, prefs, {
+  const baseCtx = {
     prefs,
     recentRecipes,
     highlyRatedRecipes,
     dislikedRecipes,
     ratings,
-    targetCounts: targets,
     weekStart,
-  });
+  };
 
-  totalGenerated += firstRound.generated;
-  totalRejected += firstRound.rejected;
-  accepted.push(...firstRound.recipes);
+  // Generate each meal type in its own request, in parallel. A single combined
+  // request asks for ~14 full recipes and truncates on max_tokens before it
+  // emits the later meal types — so we isolate each type for reliability.
+  const perType = await Promise.all(
+    MEAL_TYPES.map((mealType) =>
+      generateForMealType(client, model, prefs, mealType, targets[mealType], baseCtx)
+    )
+  );
 
-  // --- Top-up rounds ---
-  for (let round = 0; round < MAX_TOPUP_ROUNDS; round++) {
-    const shortfall = computeShortfall(accepted, targets);
-    const shortfallTotal = shortfall.breakfast + shortfall.lunch + shortfall.dinner;
-    if (shortfallTotal === 0) break;
-
-    const topup = await runRound(client, model, prefs, {
-      prefs,
-      recentRecipes,
-      highlyRatedRecipes,
-      dislikedRecipes,
-      ratings,
-      targetCounts: shortfall,
-      weekStart,
-      existingTitles: accepted.map((r) => r.title),
-    });
-
-    totalGenerated += topup.generated;
-    totalRejected += topup.rejected;
-    accepted.push(...topup.recipes);
+  const accepted: Recipe[] = [];
+  let totalGenerated = 0;
+  let totalRejected = 0;
+  for (const result of perType) {
+    accepted.push(...result.recipes);
+    totalGenerated += result.generated;
+    totalRejected += result.rejected;
   }
 
   return { recipes: accepted, totalGenerated, totalRejected };
+}
+
+/** Generate candidates for a single meal type, retrying to fill any shortfall. */
+async function generateForMealType(
+  client: Anthropic,
+  model: string,
+  prefs: HouseholdPreferences,
+  mealType: MealType,
+  target: number,
+  baseCtx: Omit<GenerationContext, "targetCounts">
+): Promise<{ recipes: Recipe[]; generated: number; rejected: number }> {
+  if (target === 0) return { recipes: [], generated: 0, rejected: 0 };
+
+  const accepted: Recipe[] = [];
+  let generated = 0;
+  let rejected = 0;
+
+  for (let round = 0; round <= MAX_TOPUP_ROUNDS; round++) {
+    const shortfall = target - accepted.length;
+    if (shortfall <= 0) break;
+
+    const targetCounts: MealCounts = {
+      breakfast: mealType === "breakfast" ? shortfall : 0,
+      lunch: mealType === "lunch" ? shortfall : 0,
+      dinner: mealType === "dinner" ? shortfall : 0,
+    };
+
+    let result: { recipes: Recipe[]; generated: number; rejected: number };
+    try {
+      result = await runRound(client, model, prefs, {
+        ...baseCtx,
+        targetCounts,
+        existingTitles: accepted.map((r) => r.title),
+      });
+    } catch (err) {
+      // Isolate failures: one meal type erroring shouldn't lose the others.
+      console.error(JSON.stringify({ mealType, round, error: String(err) }));
+      break;
+    }
+
+    const matching = result.recipes.filter((r) => r.mealType === mealType);
+    generated += result.generated;
+    rejected += result.rejected + (result.recipes.length - matching.length);
+    accepted.push(...matching);
+
+    // A round that produced nothing on-type won't improve on retry — stop early.
+    if (matching.length === 0) break;
+  }
+
+  return { recipes: accepted, generated, rejected };
 }
 
 async function runRound(
@@ -134,16 +171,6 @@ async function runRound(
   }
 
   return { recipes, generated, rejected };
-}
-
-function computeShortfall(accepted: Recipe[], targets: MealCounts): MealCounts {
-  const counts = { breakfast: 0, lunch: 0, dinner: 0 };
-  for (const r of accepted) counts[r.mealType]++;
-  return {
-    breakfast: Math.max(0, targets.breakfast - counts.breakfast),
-    lunch: Math.max(0, targets.lunch - counts.lunch),
-    dinner: Math.max(0, targets.dinner - counts.dinner),
-  };
 }
 
 function parseRecipeBlock(input: Record<string, unknown>): Recipe {
