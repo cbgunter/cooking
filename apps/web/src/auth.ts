@@ -53,6 +53,17 @@ export function getCurrentUserEmail(): string | null {
   }
 }
 
+const NAME_MAP: Record<string, string> = {
+  "cbgunter@gmail.com": "Corey",
+  "lmalava87@gmail.com": "Luisa",
+};
+
+export function getDisplayName(): string {
+  const email = getCurrentUserEmail();
+  if (!email) return "there";
+  return NAME_MAP[email] ?? email.split("@")[0] ?? "there";
+}
+
 export function signOut(): void {
   userPool.getCurrentUser()?.signOut();
   localStorage.removeItem(TOKEN_KEY);

@@ -2,6 +2,7 @@ import type { Handler } from "aws-lambda";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { generateMenuCandidates } from "@cooking/ai";
 import { DEFAULT_PREFERENCES } from "@cooking/core";
+import type { MealCounts } from "@cooking/core";
 import * as db from "./db.js";
 
 const smClient = new SecretsManagerClient({});
@@ -12,7 +13,6 @@ async function getAnthropicKey(): Promise<string> {
     const res = await smClient.send(new GetSecretValueCommand({ SecretId: arn }));
     if (res.SecretString) return res.SecretString;
   }
-  // Fallback: plain env var (local dev or direct override)
   const key = process.env["ANTHROPIC_API_KEY"];
   if (key) return key;
   throw new Error("No Anthropic API key — set ANTHROPIC_SECRET_ARN or ANTHROPIC_API_KEY");
@@ -20,13 +20,13 @@ async function getAnthropicKey(): Promise<string> {
 
 interface GenerateEvent {
   weekStart?: string;
+  mealCounts?: MealCounts;
 }
 
-/** Lambda handler: generates recipe candidates and stores them in DynamoDB. */
 export const handler: Handler<GenerateEvent> = async (event) => {
   const weekStart = event.weekStart ?? upcomingMondayISO();
   try {
-    await run(weekStart);
+    await run(weekStart, event.mealCounts);
   } catch (err) {
     console.error(JSON.stringify({ weekStart, error: String(err) }));
     const failed = await db.getWeek(weekStart);
@@ -37,30 +37,40 @@ export const handler: Handler<GenerateEvent> = async (event) => {
   }
 };
 
-async function run(weekStart: string) {
+async function run(weekStart: string, eventMealCounts?: MealCounts) {
   const apiKey = await getAnthropicKey();
 
-  const [prefs, recentRecipes, highlyRatedRecipes, ratings, week] = await Promise.all([
-    db.getPreferences(),
-    db.getRecentRecipes(4),
-    db.getHighlyRatedRecipes(4),
-    db.getAllRatings(),
-    db.getWeek(weekStart),
-  ]);
+  const [prefs, recentRecipes, highlyRatedRecipes, dislikedRecipes, ratings, week] =
+    await Promise.all([
+      db.getPreferences(),
+      db.getRecentRecipes(4),
+      db.getHighlyRatedRecipes(4),
+      db.getDislikedRecipes(),
+      db.getAllRatings(),
+      db.getWeek(weekStart),
+    ]);
 
   const resolvedPrefs = prefs ?? DEFAULT_PREFERENCES;
+
+  // Determine per-type meal counts: event → stored week → default spread
+  const mealCounts: MealCounts =
+    eventMealCounts ??
+    week?.mealCounts ??
+    defaultMealCounts(resolvedPrefs.defaultDaysPerWeek);
 
   const { recipes, totalGenerated, totalRejected } = await generateMenuCandidates({
     prefs: resolvedPrefs,
     recentRecipes,
     highlyRatedRecipes,
+    dislikedRecipes,
     ratings,
+    mealCounts,
     weekStart,
     apiKey,
   });
 
   console.log(
-    JSON.stringify({ weekStart, totalGenerated, totalRejected, saved: recipes.length })
+    JSON.stringify({ weekStart, mealCounts, totalGenerated, totalRejected, saved: recipes.length })
   );
 
   if (recipes.length === 0) {
@@ -75,13 +85,19 @@ async function run(weekStart: string) {
     id: weekStart,
     weekStart,
     status: "selecting",
-    daysPerWeek: week?.daysPerWeek ?? resolvedPrefs.defaultDaysPerWeek,
+    daysPerWeek: mealCounts.breakfast + mealCounts.lunch + mealCounts.dinner,
+    mealCounts,
     candidateRecipeIds: recipes.map((r) => r.id),
     selections: week?.selections ?? [],
     cookedRecipeIds: week?.cookedRecipeIds ?? [],
     createdAt: week?.createdAt ?? now,
     updatedAt: now,
   });
+}
+
+function defaultMealCounts(daysPerWeek: number): MealCounts {
+  const d = Math.max(1, daysPerWeek);
+  return { breakfast: d, lunch: d, dinner: d };
 }
 
 function upcomingMondayISO(): string {

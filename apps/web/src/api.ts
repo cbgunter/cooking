@@ -4,6 +4,7 @@ import type {
   Week,
   ShoppingList,
   WeekSelection,
+  MealCounts,
 } from "@cooking/core";
 import { getToken } from "./auth.js";
 
@@ -43,20 +44,16 @@ export const getWeeks = () =>
 export const getWeekByStart = (weekStart: string) =>
   req<{ week: Week | null; candidates: Recipe[] }>(`/weeks/${weekStart}`);
 
-export const triggerGenerateForWeek = (weekStart: string, daysPerWeek?: number) =>
+export const triggerGenerateForWeek = (weekStart: string, mealCounts: MealCounts) =>
   req<{ week: Week }>(`/weeks/${weekStart}/generate`, {
     method: "POST",
-    body: JSON.stringify(daysPerWeek ? { daysPerWeek } : {}),
+    body: JSON.stringify({ mealCounts }),
   });
 
-export const selectMealsForWeek = (
-  weekStart: string,
-  selections: WeekSelection[],
-  daysPerWeek?: number
-) =>
+export const selectMealsForWeek = (weekStart: string, selections: WeekSelection[]) =>
   req<{ week: Week }>(`/weeks/${weekStart}/select`, {
     method: "POST",
-    body: JSON.stringify({ selections, daysPerWeek }),
+    body: JSON.stringify({ selections }),
   });
 
 export const skipWeekByStart = (weekStart: string) =>
@@ -79,13 +76,16 @@ export const getShoppingListForWeek = (weekStart: string) =>
 export const getCurrentWeek = () =>
   req<{ week: Week | null; candidates: Recipe[] }>("/weeks/current");
 
-export const triggerGenerate = () =>
-  req<{ week: Week }>("/weeks/current/generate", { method: "POST" });
+export const triggerGenerate = (mealCounts?: MealCounts) =>
+  req<{ week: Week }>("/weeks/current/generate", {
+    method: "POST",
+    body: JSON.stringify(mealCounts ? { mealCounts } : {}),
+  });
 
-export const selectMeals = (selections: WeekSelection[], daysPerWeek?: number) =>
+export const selectMeals = (selections: WeekSelection[]) =>
   req<{ week: Week }>("/weeks/current/select", {
     method: "POST",
-    body: JSON.stringify({ selections, daysPerWeek }),
+    body: JSON.stringify({ selections }),
   });
 
 export const skipWeek = () =>

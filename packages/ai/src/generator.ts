@@ -1,11 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
-import type { Recipe, HouseholdPreferences, Rating } from "@cooking/core";
+import type { Recipe, HouseholdPreferences, Rating, MealCounts } from "@cooking/core";
 import { passesConstraints } from "@cooking/core";
 import { RECIPE_TOOL_SCHEMA } from "./schema.js";
 import {
   buildMenuGenerationPrompt,
-  buildMealDistribution,
+  buildTargetCounts,
   type GenerationContext,
 } from "./prompt.js";
 
@@ -13,28 +13,23 @@ export interface GenerateMenuOptions {
   prefs: HouseholdPreferences;
   recentRecipes?: Recipe[];
   highlyRatedRecipes?: Recipe[];
+  dislikedRecipes?: Array<{ title: string; notes?: string }>;
   ratings?: Rating[];
-  /** How many recipe candidates to generate. Defaults to ~1.8× daysPerWeek. */
-  candidateCount?: number;
-  /** ISO date string for the Monday of the target week (e.g. "2025-09-01"). */
+  /** Per-type user day counts; candidates generated = 2× each. */
+  mealCounts: MealCounts;
   weekStart: string;
   apiKey: string;
-  /** Claude model to use. Defaults to claude-sonnet-4-6 for cost efficiency. */
   model?: string;
 }
 
 export interface GenerateMenuResult {
   recipes: Recipe[];
-  /** Total tool_use blocks Claude emitted (before constraint filtering). */
   totalGenerated: number;
-  /** Count rejected by constraint validation. */
   totalRejected: number;
 }
 
-/**
- * Calls Claude with tool use to generate recipe candidates for the week.
- * Returns only candidates that pass all household constraints.
- */
+const MAX_TOPUP_ROUNDS = 2;
+
 export async function generateMenuCandidates(
   opts: GenerateMenuOptions
 ): Promise<GenerateMenuResult> {
@@ -42,28 +37,71 @@ export async function generateMenuCandidates(
     prefs,
     recentRecipes = [],
     highlyRatedRecipes = [],
+    dislikedRecipes = [],
     ratings = [],
+    mealCounts,
     weekStart,
     apiKey,
     model = "claude-sonnet-4-6",
   } = opts;
 
-  const candidateCount =
-    opts.candidateCount ?? Math.ceil(prefs.defaultDaysPerWeek * 1.8);
-  const mealDistribution = buildMealDistribution(candidateCount, prefs.defaultDaysPerWeek);
+  const client = new Anthropic({ apiKey });
+  const targets = buildTargetCounts(mealCounts);
 
-  const ctx: GenerationContext = {
+  const accepted: Recipe[] = [];
+  let totalGenerated = 0;
+  let totalRejected = 0;
+
+  // --- Initial round ---
+  const firstRound = await runRound(client, model, prefs, {
     prefs,
     recentRecipes,
     highlyRatedRecipes,
+    dislikedRecipes,
     ratings,
-    candidateCount,
+    targetCounts: targets,
     weekStart,
-    mealDistribution,
-  };
+  });
+
+  totalGenerated += firstRound.generated;
+  totalRejected += firstRound.rejected;
+  accepted.push(...firstRound.recipes);
+
+  // --- Top-up rounds ---
+  for (let round = 0; round < MAX_TOPUP_ROUNDS; round++) {
+    const shortfall = computeShortfall(accepted, targets);
+    const shortfallTotal = shortfall.breakfast + shortfall.lunch + shortfall.dinner;
+    if (shortfallTotal === 0) break;
+
+    const topup = await runRound(client, model, prefs, {
+      prefs,
+      recentRecipes,
+      highlyRatedRecipes,
+      dislikedRecipes,
+      ratings,
+      targetCounts: shortfall,
+      weekStart,
+      existingTitles: accepted.map((r) => r.title),
+    });
+
+    totalGenerated += topup.generated;
+    totalRejected += topup.rejected;
+    accepted.push(...topup.recipes);
+  }
+
+  return { recipes: accepted, totalGenerated, totalRejected };
+}
+
+async function runRound(
+  client: Anthropic,
+  model: string,
+  prefs: HouseholdPreferences,
+  ctx: GenerationContext
+): Promise<{ recipes: Recipe[]; generated: number; rejected: number }> {
+  const total = ctx.targetCounts.breakfast + ctx.targetCounts.lunch + ctx.targetCounts.dinner;
+  if (total === 0) return { recipes: [], generated: 0, rejected: 0 };
 
   const prompt = buildMenuGenerationPrompt(ctx);
-  const client = new Anthropic({ apiKey });
 
   const stream = client.messages.stream({
     model,
@@ -77,32 +115,40 @@ export async function generateMenuCandidates(
   const response = await stream.finalMessage();
 
   const recipes: Recipe[] = [];
-  let totalGenerated = 0;
-  let totalRejected = 0;
+  let generated = 0;
+  let rejected = 0;
 
   for (const block of response.content) {
     if (block.type !== "tool_use" || block.name !== "add_recipe") continue;
-    totalGenerated++;
-
+    generated++;
     try {
       const recipe = parseRecipeBlock(block.input as Record<string, unknown>);
       if (passesConstraints(recipe, prefs)) {
         recipes.push(recipe);
       } else {
-        totalRejected++;
+        rejected++;
       }
     } catch {
-      totalRejected++;
+      rejected++;
     }
   }
 
-  return { recipes, totalGenerated, totalRejected };
+  return { recipes, generated, rejected };
+}
+
+function computeShortfall(accepted: Recipe[], targets: MealCounts): MealCounts {
+  const counts = { breakfast: 0, lunch: 0, dinner: 0 };
+  for (const r of accepted) counts[r.mealType]++;
+  return {
+    breakfast: Math.max(0, targets.breakfast - counts.breakfast),
+    lunch: Math.max(0, targets.lunch - counts.lunch),
+    dinner: Math.max(0, targets.dinner - counts.dinner),
+  };
 }
 
 function parseRecipeBlock(input: Record<string, unknown>): Recipe {
   const reuseNotes =
     typeof input["reuseNotes"] === "string" ? input["reuseNotes"] : undefined;
-
   return {
     id: randomUUID(),
     title: input["title"] as string,

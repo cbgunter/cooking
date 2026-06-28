@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Recipe, Week } from "@cooking/core";
+import type { Recipe, Week, MealCounts } from "@cooking/core";
 import * as api from "../api.js";
+import { getDisplayName } from "../auth.js";
 
-// Use local date parts to avoid UTC offset shifting the date back one day
 function toLocalISO(d: Date): string {
   return [
     d.getFullYear(),
@@ -12,43 +12,50 @@ function toLocalISO(d: Date): string {
   ].join("-");
 }
 
-function getUpcomingMondays(count = 4): string[] {
+/** Returns the next 5 Mondays starting with NEXT week (never the current week). */
+function getNextFiveMondays(): string[] {
   const today = new Date();
-  const day = today.getDay();
-  const daysToThisMon = day === 0 ? 1 : 1 - day;
+  const day = today.getDay(); // 0=Sun, 1=Mon
+  const daysToNextMon = day === 0 ? 1 : 8 - day;
   const base = new Date(today);
-  base.setDate(today.getDate() + daysToThisMon);
+  base.setDate(today.getDate() + daysToNextMon);
   base.setHours(0, 0, 0, 0);
-  return Array.from({ length: count }, (_, i) => {
+  return Array.from({ length: 5 }, (_, i) => {
     const d = new Date(base);
     d.setDate(base.getDate() + i * 7);
     return toLocalISO(d);
   });
 }
 
-function formatWeekDate(weekStart: string): string {
+function formatWeekLabel(weekStart: string): string {
   const [y, m, d] = weekStart.split("-").map(Number);
-  return new Date(y!, m! - 1, d!).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  const date = new Date(y!, m! - 1, d!);
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-const MEAL_COLORS: Record<string, string> = {
-  breakfast: "#F5E8DE",  // Apricot tint
-  lunch: "#EFE9DC",      // Cream
-  dinner: "#DCE8D4",     // Sprout tint
-};
+function formatWeekRange(weekStart: string): string {
+  const [y, m, d] = weekStart.split("-").map(Number);
+  const mon = new Date(y!, m! - 1, d!);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  const fmt = (dt: Date) => dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${fmt(mon)} – ${fmt(sun)}`;
+}
 
 const STATUS_BADGE: Record<string, { bg: string; color: string; label: string }> = {
   pending:   { bg: "#EFE9DC", color: "#7C766A", label: "Generating…" },
-  selecting: { bg: "#F5E8DE", color: "#A8623C", label: "Choose meals" },
-  shopping:  { bg: "#DCE8D4", color: "#42532F", label: "Ready to shop" },
+  selecting: { bg: "#F5E8DE", color: "#A8623C", label: "Ready to choose" },
+  shopping:  { bg: "#DCE8D4", color: "#42532F", label: "Shopping" },
   cooking:   { bg: "#DCE8D4", color: "#566A46", label: "Cooking" },
   done:      { bg: "#DCE8D4", color: "#566A46", label: "Complete" },
   skipped:   { bg: "#EFE9DC", color: "#7C766A", label: "Skipped" },
   error:     { bg: "#F5DEDA", color: "#7A2E22", label: "Failed" },
+};
+
+const MEAL_COLORS: Record<string, string> = {
+  breakfast: "#F5E8DE",
+  lunch: "#EFE9DC",
+  dinner: "#DCE8D4",
 };
 
 interface WeekEntry {
@@ -57,15 +64,16 @@ interface WeekEntry {
   selectedRecipes: Recipe[];
 }
 
-const MONDAYS = getUpcomingMondays(4);
+const MONDAYS = getNextFiveMondays();
 
-export default function WeekPage() {
+export default function ChoosePage() {
   const [entries, setEntries] = useState<WeekEntry[]>(
     MONDAYS.map((ws) => ({ weekStart: ws, week: null, selectedRecipes: [] }))
   );
   const [loading, setLoading] = useState(true);
   const [generatingFor, setGeneratingFor] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
+  const name = getDisplayName();
 
   const loadWeeks = useCallback(async () => {
     const { weeks } = await api.getWeeks();
@@ -83,6 +91,7 @@ export default function WeekPage() {
     loadWeeks().finally(() => setLoading(false));
   }, [loadWeeks]);
 
+  // Poll while any week is pending
   useEffect(() => {
     const hasPending = entries.some((e) => e.week?.status === "pending") || generatingFor.size > 0;
     if (!hasPending) return;
@@ -90,6 +99,7 @@ export default function WeekPage() {
     return () => clearInterval(id);
   }, [entries, generatingFor, loadWeeks]);
 
+  // Clear generatingFor once the week is no longer pending
   useEffect(() => {
     setGeneratingFor((prev) => {
       const next = new Set(prev);
@@ -101,10 +111,10 @@ export default function WeekPage() {
     });
   }, [entries]);
 
-  const handleGenerate = async (weekStart: string, days: number) => {
+  const handleGenerate = async (weekStart: string, mealCounts: MealCounts) => {
     setGeneratingFor((p) => new Set(p).add(weekStart));
     try {
-      await api.triggerGenerateForWeek(weekStart, { breakfast: 1, lunch: 1, dinner: Math.max(1, days - 2) });
+      await api.triggerGenerateForWeek(weekStart, mealCounts);
       await loadWeeks();
     } catch (err) {
       setGeneratingFor((p) => { const n = new Set(p); n.delete(weekStart); return n; });
@@ -121,31 +131,37 @@ export default function WeekPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Spinner />
-      </div>
-    );
-  }
-
   return (
     <div style={{ flex: 1, overflowY: "auto" }}>
-      <div style={{ padding: "24px 16px 12px", borderBottom: "1px solid var(--border)" }}>
-        <h1>Upcoming weeks</h1>
+      {/* Header */}
+      <div style={{ padding: "28px 20px 20px" }}>
+        <p style={{ fontSize: "0.78rem", color: "var(--stone)", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 4 }}>
+          Good to see you
+        </p>
+        <h1 style={{ margin: 0, fontSize: "1.8rem", lineHeight: 1.1 }}>Hello, {name}</h1>
+        <p style={{ marginTop: 6, color: "var(--stone)", fontSize: "0.9rem" }}>
+          Pick your meals for the weeks ahead.
+        </p>
       </div>
-      <div className="stack gap-3" style={{ padding: "16px 16px 80px" }}>
-        {entries.map((entry) => (
-          <WeekCard
-            key={entry.weekStart}
-            entry={entry}
-            generating={generatingFor.has(entry.weekStart)}
-            onGenerate={(days) => handleGenerate(entry.weekStart, days)}
-            onSkip={() => handleSkip(entry.weekStart)}
-            onOpen={() => navigate(`/weeks/${entry.weekStart}`)}
-          />
-        ))}
-      </div>
+
+      {loading ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: 48 }}>
+          <Spinner />
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "0 16px 32px" }}>
+          {entries.map((entry) => (
+            <WeekCard
+              key={entry.weekStart}
+              entry={entry}
+              generating={generatingFor.has(entry.weekStart)}
+              onGenerate={(mc) => handleGenerate(entry.weekStart, mc)}
+              onSkip={() => handleSkip(entry.weekStart)}
+              onOpen={() => navigate(`/weeks/${entry.weekStart}`)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -159,46 +175,59 @@ function WeekCard({
 }: {
   entry: WeekEntry;
   generating: boolean;
-  onGenerate: (days: number) => void;
+  onGenerate: (mc: MealCounts) => void;
   onSkip: () => void;
   onOpen: () => void;
 }) {
   const { weekStart, week, selectedRecipes } = entry;
   const [picking, setPicking] = useState(false);
-  const [days, setDays] = useState(5);
+  const [counts, setCounts] = useState<MealCounts>({ breakfast: 1, lunch: 1, dinner: 3 });
 
-  const label = formatWeekDate(weekStart);
+  const label = formatWeekRange(weekStart);
+  const short = formatWeekLabel(weekStart);
   const isPending = generating || week?.status === "pending";
   const isEmpty = !week || week.status === "done" || week.status === "skipped" || week.status === "error";
   const badge = week?.status ? STATUS_BADGE[week.status] : null;
+  const totalMeals = counts.breakfast + counts.lunch + counts.dinner;
 
   const confirmGenerate = () => {
     setPicking(false);
-    onGenerate(days);
+    onGenerate(counts);
+  };
+
+  const stepperChange = (key: keyof MealCounts, delta: number) => {
+    setCounts((prev) => ({
+      ...prev,
+      [key]: Math.max(0, Math.min(7, prev[key] + delta)),
+    }));
   };
 
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-      {/* Header */}
+      {/* Card header */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           padding: "14px 16px 12px",
-          borderBottom: "1px solid var(--border)",
+          borderBottom: picking ? "1px solid var(--line)" : "none",
         }}
       >
-        <span style={{ fontWeight: 700, fontSize: "1rem" }}>{label}</span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>Week of {short}</div>
+          <div style={{ fontSize: "0.75rem", color: "var(--stone)", marginTop: 1 }}>{label}</div>
+        </div>
         {badge && (
           <span
             style={{
-              fontSize: "0.7rem",
+              fontSize: "0.68rem",
               fontWeight: 600,
               padding: "3px 9px",
               borderRadius: 12,
               background: badge.bg,
               color: badge.color,
+              whiteSpace: "nowrap",
             }}
           >
             {badge.label}
@@ -206,16 +235,19 @@ function WeekCard({
         )}
       </div>
 
-      {/* Body */}
       <div style={{ padding: "12px 16px 14px" }}>
+        {/* Pending state */}
         {isPending ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0 10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 10 }}>
             <Spinner size={18} />
-            <span style={{ color: "var(--slate-light)", fontSize: "0.85rem" }}>
+            <span style={{ color: "var(--stone)", fontSize: "0.85rem" }}>
               Chef Claude is crafting your menu…
             </span>
           </div>
-        ) : selectedRecipes.length > 0 && !picking ? (
+        ) : null}
+
+        {/* Selected meal chips */}
+        {!isPending && selectedRecipes.length > 0 && !picking ? (
           <div
             style={{
               display: "flex",
@@ -230,8 +262,8 @@ function WeekCard({
                 key={r.id}
                 style={{
                   flexShrink: 0,
-                  width: 108,
-                  height: 68,
+                  width: 104,
+                  height: 64,
                   borderRadius: 8,
                   background: MEAL_COLORS[r.mealType] ?? "#F5F5F5",
                   padding: "8px 8px 6px",
@@ -242,7 +274,7 @@ function WeekCard({
               >
                 <span
                   style={{
-                    fontSize: "0.68rem",
+                    fontSize: "0.66rem",
                     fontWeight: 600,
                     lineHeight: 1.25,
                     overflow: "hidden",
@@ -253,14 +285,17 @@ function WeekCard({
                 >
                   {r.title}
                 </span>
-                <span style={{ fontSize: "0.6rem", color: "#7C766A", textTransform: "capitalize" }}>
+                <span style={{ fontSize: "0.58rem", color: "#7C766A", textTransform: "capitalize" }}>
                   {r.mealType}
                 </span>
               </div>
             ))}
           </div>
-        ) : isEmpty && !picking ? (
-          <p style={{ color: "var(--slate-light)", fontSize: "0.85rem", margin: "4px 0 10px" }}>
+        ) : null}
+
+        {/* Empty state text */}
+        {!isPending && isEmpty && !picking ? (
+          <p style={{ color: "var(--stone)", fontSize: "0.85rem", margin: "0 0 10px" }}>
             {week?.status === "skipped"
               ? "You skipped this week."
               : week?.status === "error"
@@ -269,38 +304,64 @@ function WeekCard({
           </p>
         ) : null}
 
-        {/* Pre-generate picker */}
-        {picking && !isPending && (
-          <div style={{ paddingBottom: 4 }}>
-            <p style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: 10, color: "var(--slate)" }}>
-              How many meals this week?
+        {/* Per-type picker */}
+        {picking && !isPending ? (
+          <div>
+            <p style={{ fontSize: "0.82rem", color: "var(--stone)", marginBottom: 14 }}>
+              How many meals per type this week?
             </p>
-            <div className="row gap-2" style={{ marginBottom: 14, flexWrap: "wrap" }}>
-              {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setDays(n)}
+            {(["breakfast", "lunch", "dinner"] as const).map((type) => (
+              <div
+                key={type}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 10,
+                }}
+              >
+                <span
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    border: `2px solid ${days === n ? "var(--clay)" : "var(--border)"}`,
-                    background: days === n ? "var(--clay)" : "transparent",
-                    color: days === n ? "#fff" : "var(--slate)",
-                    fontWeight: 700,
-                    fontSize: "0.9rem",
-                    cursor: "pointer",
+                    fontSize: "0.88rem",
+                    fontWeight: 500,
+                    color: "var(--ink)",
+                    textTransform: "capitalize",
+                    width: 80,
                   }}
                 >
-                  {n}
-                </button>
-              ))}
-            </div>
-            <div className="stack gap-2">
-              <button className="btn btn-primary" style={{ width: "100%" }} onClick={confirmGenerate}>
-                Generate {days} meal{days !== 1 ? "s" : ""}
+                  {type}
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <button
+                    onClick={() => stepperChange(type, -1)}
+                    disabled={counts[type] === 0}
+                    style={stepperBtnStyle(counts[type] === 0)}
+                  >
+                    −
+                  </button>
+                  <span style={{ fontWeight: 700, fontSize: "1rem", width: 18, textAlign: "center" }}>
+                    {counts[type]}
+                  </span>
+                  <button
+                    onClick={() => stepperChange(type, +1)}
+                    disabled={counts[type] === 7}
+                    style={stepperBtnStyle(counts[type] === 7)}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+              <button
+                className="btn btn-primary"
+                style={{ width: "100%" }}
+                onClick={confirmGenerate}
+                disabled={totalMeals === 0}
+              >
+                Generate {totalMeals} meal{totalMeals !== 1 ? "s" : ""}
               </button>
-              <div className="row gap-2">
+              <div style={{ display: "flex", gap: 8 }}>
                 <button
                   className="btn btn-ghost text-sm"
                   style={{ flex: 1 }}
@@ -318,14 +379,14 @@ function WeekCard({
               </div>
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Action buttons */}
-        {!isPending && !picking && (
-          <>
+        {!isPending && !picking ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {isEmpty && (
               <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => setPicking(true)}>
-                Generate menu
+                Plan this week
               </button>
             )}
             {week?.status === "selecting" && (
@@ -334,15 +395,32 @@ function WeekCard({
               </button>
             )}
             {(week?.status === "shopping" || week?.status === "cooking") && (
-              <button className="btn btn-primary" style={{ width: "100%" }} onClick={onOpen}>
-                {week.status === "cooking" ? "View recipes" : "View & shop"}
+              <button className="btn btn-outline" style={{ width: "100%" }} onClick={onOpen}>
+                View meals
               </button>
             )}
-          </>
-        )}
+          </div>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function stepperBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    border: `1.5px solid ${disabled ? "var(--line)" : "var(--garden)"}`,
+    background: "transparent",
+    color: disabled ? "var(--line)" : "var(--garden)",
+    fontSize: "1.1rem",
+    lineHeight: 1,
+    cursor: disabled ? "default" : "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
 }
 
 function Spinner({ size = 32 }: { size?: number }) {
@@ -351,11 +429,12 @@ function Spinner({ size = 32 }: { size?: number }) {
       style={{
         width: size,
         height: size,
-        border: `${size > 24 ? 3 : 2}px solid var(--border)`,
-        borderTopColor: "var(--clay)",
+        border: `${size > 24 ? 3 : 2}px solid var(--line)`,
+        borderTopColor: "var(--garden)",
         borderRadius: "50%",
         animation: "spin 0.8s linear infinite",
         flexShrink: 0,
+        margin: size === 32 ? "0 auto" : undefined,
       }}
     />
   );

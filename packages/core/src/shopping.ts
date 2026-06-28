@@ -1,14 +1,17 @@
-import type { Recipe, ShoppingList, ShoppingListItem } from "./types.js";
+import type { Recipe, ShoppingList, ShoppingListItem, WeekSelection } from "./types.js";
 
 export function buildShoppingList(
   weekId: string,
   recipes: Recipe[],
-  peopleCount: number
+  peopleCount: number,
+  selections?: WeekSelection[]
 ): ShoppingList {
   const itemMap = new Map<string, ShoppingListItem>();
 
   for (const recipe of recipes) {
-    const scale = peopleCount / recipe.servings;
+    const sel = selections?.find((s) => s.recipeId === recipe.id);
+    const mealQty = sel?.quantity ?? 1;
+    const scale = (peopleCount / recipe.servings) * mealQty;
 
     for (const ing of recipe.ingredients) {
       const key = `${ing.name.toLowerCase()}::${ing.unit.toLowerCase()}`;

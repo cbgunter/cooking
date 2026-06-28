@@ -9,9 +9,9 @@ const MEAL_ORDER: MealType[] = ["breakfast", "lunch", "dinner"];
 function formatWeekDate(weekStart: string): string {
   const [y, m, d] = weekStart.split("-").map(Number);
   return new Date(y!, m! - 1, d!).toLocaleDateString("en-US", {
-    weekday: "short",
     month: "short",
     day: "numeric",
+    year: "numeric",
   });
 }
 
@@ -20,45 +20,67 @@ export default function WeekDetailPage() {
   const navigate = useNavigate();
   const [week, setWeek] = useState<Week | null>(null);
   const [candidates, setCandidates] = useState<Recipe[]>([]);
-  const [selected, setSelected] = useState<WeekSelection[]>([]);
-  const [filter, setFilter] = useState<MealType | "all">("all");
+  // Map: recipeId → quantity chosen (0 = not selected)
+  const [quantities, setQuantities] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [myEmail] = useState<string | null>(getCurrentUserEmail);
 
-  useEffect(() => {
+  const loadWeek = useCallback(async () => {
     if (!weekStart) return;
-    api
-      .getWeekByStart(weekStart)
-      .then(({ week: w, candidates: c }) => {
-        setWeek(w);
-        setCandidates(c);
-        if (w) setSelected(w.selections);
-      })
-      .finally(() => setLoading(false));
+    const { week: w, candidates: c } = await api.getWeekByStart(weekStart);
+    setWeek(w);
+    setCandidates(c);
+    if (w) {
+      const qMap = new Map<string, number>();
+      for (const sel of w.selections) {
+        qMap.set(sel.recipeId, (qMap.get(sel.recipeId) ?? 0) + (sel.quantity ?? 1));
+      }
+      setQuantities(qMap);
+    }
   }, [weekStart]);
+
+  useEffect(() => {
+    loadWeek().finally(() => setLoading(false));
+  }, [loadWeek]);
 
   // Poll while pending
   useEffect(() => {
     if (week?.status !== "pending") return;
     const id = setInterval(async () => {
-      if (!weekStart) return;
-      const { week: w, candidates: c } = await api.getWeekByStart(weekStart);
+      const { week: w, candidates: c } = await api.getWeekByStart(weekStart!);
       if (w && w.status !== "pending") {
         setWeek(w);
         setCandidates(c);
-        setSelected(w.selections);
+        const qMap = new Map<string, number>();
+        for (const sel of w.selections) {
+          qMap.set(sel.recipeId, (qMap.get(sel.recipeId) ?? 0) + (sel.quantity ?? 1));
+        }
+        setQuantities(qMap);
       }
     }, 5000);
     return () => clearInterval(id);
   }, [week?.status, weekStart]);
 
+  const buildSelections = (): WeekSelection[] => {
+    const sel: WeekSelection[] = [];
+    for (const [recipeId, qty] of quantities) {
+      if (qty === 0) continue;
+      const recipe = candidates.find((r) => r.id === recipeId);
+      if (!recipe) continue;
+      sel.push({ recipeId, mealType: recipe.mealType, quantity: qty });
+    }
+    return sel;
+  };
+
+  const totalSelected = Array.from(quantities.values()).reduce((sum, q) => sum + q, 0);
+
   const handleConfirm = async () => {
     if (!week || !weekStart) return;
     setSaving(true);
     try {
-      const { week: updated } = await api.selectMealsForWeek(weekStart, selected, week.daysPerWeek);
+      const { week: updated } = await api.selectMealsForWeek(weekStart, buildSelections());
       setWeek(updated);
       setEditing(false);
     } finally {
@@ -83,7 +105,11 @@ export default function WeekDetailPage() {
     try {
       const { week: updated } = await api.revertWeek(weekStart);
       setWeek(updated);
-      setSelected(updated.selections);
+      const qMap = new Map<string, number>();
+      for (const sel of updated.selections) {
+        qMap.set(sel.recipeId, (qMap.get(sel.recipeId) ?? 0) + (sel.quantity ?? 1));
+      }
+      setQuantities(qMap);
       setEditing(false);
     } finally {
       setSaving(false);
@@ -103,26 +129,31 @@ export default function WeekDetailPage() {
     [weekStart]
   );
 
-  const toggleRecipe = (recipe: Recipe) => {
-    const already = selected.find((s) => s.recipeId === recipe.id);
-    setSelected(
-      already
-        ? selected.filter((s) => s.recipeId !== recipe.id)
-        : [...selected, { recipeId: recipe.id, mealType: recipe.mealType }]
-    );
+  const setQty = (recipeId: string, qty: number) => {
+    setQuantities((prev) => {
+      const next = new Map(prev);
+      next.set(recipeId, Math.max(0, qty));
+      return next;
+    });
   };
 
   const enterEditMode = () => {
-    setSelected(week?.selections ?? []);
+    if (week) {
+      const qMap = new Map<string, number>();
+      for (const sel of week.selections) {
+        qMap.set(sel.recipeId, (qMap.get(sel.recipeId) ?? 0) + (sel.quantity ?? 1));
+      }
+      setQuantities(qMap);
+    }
     setEditing(true);
   };
 
   const label = weekStart ? formatWeekDate(weekStart) : "";
-  const back = () => navigate("/week");
+  const back = () => navigate("/choose");
 
   if (loading) {
     return (
-      <PageShell title={label} onBack={back}>
+      <PageShell title={`Week of ${label}`} onBack={back}>
         <div style={{ display: "flex", justifyContent: "center", padding: 48 }}>
           <Spinner />
         </div>
@@ -132,10 +163,10 @@ export default function WeekDetailPage() {
 
   if (week?.status === "pending") {
     return (
-      <PageShell title={label} onBack={back}>
+      <PageShell title={`Week of ${label}`} onBack={back}>
         <div style={{ textAlign: "center", padding: "48px 16px" }}>
           <Spinner />
-          <p className="text-muted" style={{ marginTop: 16 }}>
+          <p style={{ marginTop: 16, color: "var(--stone)", fontSize: "0.9rem" }}>
             Chef Claude is crafting your menu…
           </p>
         </div>
@@ -143,71 +174,77 @@ export default function WeekDetailPage() {
     );
   }
 
-  // Selecting view — also used when editing shopping/cooking selections
+  // Selecting view (or editing)
   if (week?.status === "selecting" || editing) {
-    const shown = filter === "all" ? candidates : candidates.filter((r) => r.mealType === filter);
-    const isSelected = (r: Recipe) => selected.some((s) => s.recipeId === r.id);
+    const grouped = MEAL_ORDER.map((type) => ({
+      type,
+      recipes: candidates.filter((r) => r.mealType === type),
+    })).filter((g) => g.recipes.length > 0);
 
     return (
-      <PageShell title={`Week of ${label}`} onBack={editing ? () => setEditing(false) : back}>
-        <div className="row gap-2" style={{ padding: "0 16px 12px", overflowX: "auto" }}>
-          {(["all", ...MEAL_ORDER] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setFilter(m)}
-              className="btn"
-              style={{
-                padding: "6px 14px",
-                fontSize: "0.8rem",
-                background: filter === m ? "var(--clay)" : "#fff",
-                color: filter === m ? "#fff" : "var(--slate)",
-                border: `1.5px solid ${filter === m ? "var(--clay)" : "var(--border)"}`,
-                borderRadius: 20,
-                flexShrink: 0,
-              }}
-            >
-              {m === "all" ? "All" : m.charAt(0).toUpperCase() + m.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        <div className="stack gap-3" style={{ padding: "0 16px" }}>
-          {shown.map((r) => (
-            <RecipeCard
-              key={r.id}
-              recipe={r}
-              selected={isSelected(r)}
-              week={week}
-              myEmail={myEmail}
-              onClick={() => toggleRecipe(r)}
-              onVote={handleVote}
-              showCheckbox
-            />
+      <PageShell
+        title={`Week of ${label}`}
+        onBack={editing ? () => setEditing(false) : back}
+      >
+        <div style={{ padding: "0 16px" }}>
+          {grouped.map(({ type, recipes }) => (
+            <section key={type} style={{ marginBottom: 24 }}>
+              <h2
+                style={{
+                  marginBottom: 12,
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  color: "var(--stone)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                }}
+              >
+                {type}
+              </h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {recipes.map((r) => {
+                  const qty = quantities.get(r.id) ?? 0;
+                  return (
+                    <RecipeCard
+                      key={r.id}
+                      recipe={r}
+                      quantity={qty}
+                      week={week}
+                      myEmail={myEmail}
+                      onQuantityChange={(delta) => setQty(r.id, qty + delta)}
+                      onVote={handleVote}
+                    />
+                  );
+                })}
+              </div>
+            </section>
           ))}
         </div>
 
         <div
-          className="stack gap-2"
           style={{
-            padding: "20px 16px",
+            padding: "20px 16px 24px",
             position: "sticky",
-            bottom: 72,
-            background: "linear-gradient(transparent, var(--ivory) 20%)",
+            bottom: 0,
+            background: "linear-gradient(transparent, var(--paper) 20%)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
           }}
         >
           <button
             className="btn btn-primary"
             onClick={handleConfirm}
-            disabled={selected.length === 0 || saving}
+            disabled={totalSelected === 0 || saving}
           >
             {saving
               ? "Saving…"
               : editing
-              ? `Save ${selected.length} meal${selected.length !== 1 ? "s" : ""}`
-              : `Confirm ${selected.length} meal${selected.length !== 1 ? "s" : ""}`}
+              ? `Save ${totalSelected} meal${totalSelected !== 1 ? "s" : ""}`
+              : `Confirm ${totalSelected} meal${totalSelected !== 1 ? "s" : ""}`}
           </button>
           {editing ? (
-            <div className="row gap-2">
+            <div style={{ display: "flex", gap: 8 }}>
               <button
                 className="btn btn-ghost text-sm"
                 style={{ flex: 1 }}
@@ -237,58 +274,72 @@ export default function WeekDetailPage() {
 
   if (week?.status === "shopping" || week?.status === "cooking") {
     const cookedSet = new Set(week.cookedRecipeIds);
-    const remaining = candidates.filter(
-      (r) => week.selections.some((s) => s.recipeId === r.id) && !cookedSet.has(r.id)
+    const selIds = week.selections.flatMap((s) =>
+      Array.from({ length: s.quantity ?? 1 }, () => s.recipeId)
     );
-    const cooked = candidates.filter((r) => cookedSet.has(r.id));
+    const remaining = selIds.filter((id) => !cookedSet.has(id));
+    const cookedIds = selIds.filter((id) => cookedSet.has(id));
+    const byId = (id: string) => candidates.find((r) => r.id === id);
 
     return (
-      <PageShell title={label} onBack={back}>
+      <PageShell title={`Week of ${label}`} onBack={back}>
         {week.confirmedBy && week.confirmedBy.length > 0 && (
-          <p style={{ fontSize: "0.75rem", color: "var(--slate-light)", padding: "0 16px 4px" }}>
+          <p style={{ fontSize: "0.75rem", color: "var(--stone)", padding: "0 16px 4px" }}>
             Confirmed by {week.confirmedBy.map((e) => e.split("@")[0]).join(" & ")}
           </p>
         )}
+
         {remaining.length > 0 && (
           <section style={{ marginBottom: 24 }}>
             <h2 style={{ padding: "0 16px 10px" }}>Up next</h2>
-            <div className="stack gap-3" style={{ padding: "0 16px" }}>
-              {remaining.map((r) => (
-                <RecipeCard
-                  key={r.id}
-                  recipe={r}
-                  onClick={() => navigate(`/recipes/${r.id}`, { state: { weekStart } })}
-                />
-              ))}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
+              {remaining.map((id, idx) => {
+                const r = byId(id);
+                if (!r) return null;
+                return (
+                  <RecipeCard
+                    key={`${id}-${idx}`}
+                    recipe={r}
+                    onClick={() => navigate(`/recipes/${r.id}`, { state: { weekStart } })}
+                  />
+                );
+              })}
             </div>
           </section>
         )}
-        {cooked.length > 0 && (
+
+        {cookedIds.length > 0 && (
           <section style={{ marginBottom: 16 }}>
-            <h2 style={{ padding: "0 16px 10px", color: "var(--slate-light)" }}>Done</h2>
-            <div className="stack gap-3" style={{ padding: "0 16px", opacity: 0.5 }}>
-              {cooked.map((r) => (
-                <RecipeCard
-                  key={r.id}
-                  recipe={r}
-                  onClick={() => navigate(`/recipes/${r.id}`, { state: { weekStart } })}
-                />
-              ))}
+            <h2 style={{ padding: "0 16px 10px", color: "var(--stone)" }}>Done</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px", opacity: 0.5 }}>
+              {cookedIds.map((id, idx) => {
+                const r = byId(id);
+                if (!r) return null;
+                return (
+                  <RecipeCard
+                    key={`${id}-done-${idx}`}
+                    recipe={r}
+                    onClick={() => navigate(`/recipes/${r.id}`, { state: { weekStart } })}
+                  />
+                );
+              })}
             </div>
           </section>
         )}
-        {remaining.length === 0 && cooked.length > 0 && (
+
+        {remaining.length === 0 && cookedIds.length > 0 && (
           <div style={{ textAlign: "center", padding: "8px 16px 24px" }}>
-            <p style={{ color: "var(--green)", fontWeight: 600, marginBottom: 12 }}>
+            <p style={{ color: "var(--garden)", fontWeight: 600, marginBottom: 12 }}>
               All meals cooked this week!
             </p>
           </div>
         )}
-        <div className="stack gap-2" style={{ padding: "4px 16px 16px" }}>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "4px 16px 24px" }}>
           <button
             className="btn btn-outline"
             style={{ width: "100%" }}
-            onClick={() => navigate(`/shopping?week=${weekStart}`)}
+            onClick={() => navigate(`/shop`)}
           >
             View shopping list
           </button>
@@ -306,13 +357,13 @@ export default function WeekDetailPage() {
 
   // done, skipped, error, or no week
   return (
-    <PageShell title={label} onBack={back}>
+    <PageShell title={`Week of ${label}`} onBack={back}>
       <div style={{ textAlign: "center", padding: "48px 16px" }}>
-        <p className="text-muted">
+        <p style={{ color: "var(--stone)" }}>
           {week?.status === "skipped" ? "You skipped this week." : "Nothing here yet."}
         </p>
         <button className="btn btn-outline" style={{ marginTop: 16 }} onClick={back}>
-          Back to weeks
+          Back to Choose
         </button>
       </div>
     </PageShell>
@@ -329,14 +380,15 @@ function PageShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="stack" style={{ flex: 1 }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "20px 16px 14px",
-          borderBottom: "1px solid var(--border)",
+          padding: "16px 16px 14px",
+          borderBottom: "1px solid var(--line)",
+          flexShrink: 0,
         }}
       >
         <button
@@ -344,40 +396,41 @@ function PageShell({
           style={{
             background: "none",
             border: "none",
-            fontSize: "1.3rem",
+            fontSize: "1.2rem",
             cursor: "pointer",
             padding: "0 4px",
-            color: "var(--slate)",
+            color: "var(--stone)",
             lineHeight: 1,
           }}
         >
           ←
         </button>
-        <h1 style={{ margin: 0 }}>{title}</h1>
+        <h1 style={{ margin: 0, fontSize: "1.1rem" }}>{title}</h1>
       </div>
-      <div style={{ flex: 1, padding: "16px 0", overflowY: "auto" }}>{children}</div>
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 0" }}>{children}</div>
     </div>
   );
 }
 
 function RecipeCard({
   recipe,
-  selected,
+  quantity,
   onClick,
-  showCheckbox,
   week,
   myEmail,
+  onQuantityChange,
   onVote,
 }: {
   recipe: Recipe;
-  selected?: boolean;
-  onClick: () => void;
-  showCheckbox?: boolean;
+  quantity?: number;
+  onClick?: () => void;
   week?: Week | null;
   myEmail?: string | null;
+  onQuantityChange?: (delta: number) => void;
   onVote?: (recipeId: string, vote: "up" | "down" | null) => void;
 }) {
   const totalMin = recipe.prepMinutes + recipe.cookMinutes;
+  const isSelected = (quantity ?? 0) > 0;
 
   let upCount = 0;
   let downCount = 0;
@@ -392,41 +445,48 @@ function RecipeCard({
   return (
     <div
       className="card"
-      onClick={onClick}
+      onClick={onQuantityChange ? undefined : onClick}
       style={{
-        cursor: "pointer",
-        border: selected ? "2px solid var(--clay)" : "2px solid transparent",
+        cursor: onClick && !onQuantityChange ? "pointer" : "default",
+        border: isSelected ? "2px solid var(--garden)" : "2px solid transparent",
         transition: "border-color 0.15s",
+        padding: "12px 14px",
       }}
     >
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-        <span className="tag badge-clay" style={{ textTransform: "capitalize" }}>
-          {recipe.mealType}
-        </span>
-        {showCheckbox && (
-          <span
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: "50%",
-              border: selected ? "none" : "2px solid var(--border)",
-              background: selected ? "var(--clay)" : "transparent",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontSize: "0.7rem",
-            }}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+        <div style={{ flex: 1 }}>
+          <h3 style={{ marginBottom: 3, fontSize: "0.95rem" }}>{recipe.title}</h3>
+          <p style={{ fontSize: "0.8rem", color: "var(--stone)", marginBottom: 8, lineHeight: 1.4 }}>
+            {recipe.description}
+          </p>
+        </div>
+        {/* Quantity stepper */}
+        {onQuantityChange !== undefined && (
+          <div
+            style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 12, flexShrink: 0 }}
+            onClick={(e) => e.stopPropagation()}
           >
-            {selected ? "✓" : ""}
-          </span>
+            <button
+              onClick={() => onQuantityChange(-1)}
+              disabled={(quantity ?? 0) === 0}
+              style={qBtnStyle((quantity ?? 0) === 0)}
+            >
+              −
+            </button>
+            <span style={{ fontWeight: 700, fontSize: "1rem", minWidth: 16, textAlign: "center" }}>
+              {quantity ?? 0}
+            </span>
+            <button
+              onClick={() => onQuantityChange(+1)}
+              style={qBtnStyle(false)}
+            >
+              +
+            </button>
+          </div>
         )}
       </div>
-      <h3 style={{ marginBottom: 4 }}>{recipe.title}</h3>
-      <p className="text-sm text-muted" style={{ marginBottom: 10, lineHeight: 1.4 }}>
-        {recipe.description}
-      </p>
-      <div className="row gap-3 text-xs text-muted" style={{ marginBottom: onVote ? 10 : 0 }}>
+
+      <div style={{ display: "flex", gap: 12, fontSize: "0.75rem", color: "var(--stone)", marginBottom: onVote ? 10 : 0 }}>
         <span>{recipe.cuisine}</span>
         <span>·</span>
         <span>{totalMin} min</span>
@@ -435,8 +495,9 @@ function RecipeCard({
         <span>·</span>
         <span>${recipe.costPerServing.toFixed(2)}/person</span>
       </div>
+
       {onVote && (
-        <div className="row gap-2" onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", gap: 8 }} onClick={(e) => e.stopPropagation()}>
           {(["up", "down"] as const).map((v) => {
             const count = v === "up" ? upCount : downCount;
             const isMe = myVote === v;
@@ -448,12 +509,12 @@ function RecipeCard({
                 onClick={() => onVote(recipe.id, isMe ? null : v)}
                 style={{
                   background: isMe ? activeBg : "transparent",
-                  border: `1.5px solid ${isMe ? activeColor : "var(--border)"}`,
+                  border: `1.5px solid ${isMe ? activeColor : "var(--line)"}`,
                   borderRadius: 20,
                   padding: "3px 10px",
                   fontSize: "0.75rem",
                   cursor: "pointer",
-                  color: isMe ? activeColor : "var(--slate-light)",
+                  color: isMe ? activeColor : "var(--stone)",
                   display: "flex",
                   alignItems: "center",
                   gap: 4,
@@ -470,14 +531,31 @@ function RecipeCard({
   );
 }
 
+function qBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    width: 28,
+    height: 28,
+    borderRadius: "50%",
+    border: `1.5px solid ${disabled ? "var(--line)" : "var(--garden)"}`,
+    background: "transparent",
+    color: disabled ? "var(--line)" : "var(--garden)",
+    fontSize: "1rem",
+    lineHeight: 1,
+    cursor: disabled ? "default" : "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+}
+
 function Spinner() {
   return (
     <div
       style={{
         width: 32,
         height: 32,
-        border: "3px solid var(--border)",
-        borderTopColor: "var(--clay)",
+        border: "3px solid var(--line)",
+        borderTopColor: "var(--garden)",
         borderRadius: "50%",
         animation: "spin 0.8s linear infinite",
         margin: "0 auto",

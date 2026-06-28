@@ -3,7 +3,7 @@ import { cors } from "hono/cors";
 import { handle } from "hono/aws-lambda";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { buildShoppingList, DEFAULT_PREFERENCES } from "@cooking/core";
-import type { Week, WeekSelection } from "@cooking/core";
+import type { Week, WeekSelection, MealCounts } from "@cooking/core";
 import * as db from "./db.js";
 
 const app = new Hono();
@@ -33,16 +33,19 @@ function upcomingMondayISO(): string {
   return monday.toISOString().split("T")[0] as string;
 }
 
-async function generateWeek(weekStart: string, daysPerWeek?: number): Promise<Week> {
+async function generateWeek(weekStart: string, mealCounts?: MealCounts): Promise<Week> {
   const now = new Date().toISOString();
   const prefs = await db.getPreferences();
   const existing = await db.getWeek(weekStart);
+  const defaultDays = prefs?.defaultDaysPerWeek ?? DEFAULT_PREFERENCES.defaultDaysPerWeek;
+  const resolvedMealCounts = mealCounts ?? existing?.mealCounts ?? { breakfast: defaultDays, lunch: defaultDays, dinner: defaultDays };
 
   const week: Week = {
     id: weekStart,
     weekStart,
     status: "pending",
-    daysPerWeek: daysPerWeek ?? existing?.daysPerWeek ?? prefs?.defaultDaysPerWeek ?? DEFAULT_PREFERENCES.defaultDaysPerWeek,
+    daysPerWeek: resolvedMealCounts.breakfast + resolvedMealCounts.lunch + resolvedMealCounts.dinner,
+    mealCounts: resolvedMealCounts,
     candidateRecipeIds: existing?.candidateRecipeIds ?? [],
     selections: existing?.selections ?? [],
     cookedRecipeIds: existing?.cookedRecipeIds ?? [],
@@ -59,7 +62,7 @@ async function generateWeek(weekStart: string, daysPerWeek?: number): Promise<We
       new InvokeCommand({
         FunctionName: generateArn,
         InvocationType: "Event",
-        Payload: Buffer.from(JSON.stringify({ weekStart })),
+        Payload: Buffer.from(JSON.stringify({ weekStart, mealCounts: resolvedMealCounts })),
       })
     );
   }
@@ -108,8 +111,8 @@ app.get("/weeks/current", async (c) => {
 });
 
 app.post("/weeks/current/generate", async (c) => {
-  const body = await c.req.json<{ daysPerWeek?: number }>().catch(() => ({} as { daysPerWeek?: number }));
-  const week = await generateWeek(upcomingMondayISO(), body.daysPerWeek);
+  const body = await c.req.json<{ mealCounts?: MealCounts }>().catch(() => ({} as { mealCounts?: MealCounts }));
+  const week = await generateWeek(upcomingMondayISO(), body.mealCounts);
   return c.json({ week }, 202);
 });
 
@@ -151,7 +154,7 @@ app.get("/weeks/current/shopping-list", async (c) => {
   const prefs = await db.getPreferences();
   const peopleCount = prefs?.peopleCount ?? DEFAULT_PREFERENCES.peopleCount;
   const recipes = await db.getCandidateRecipes(week.selections.map((s) => s.recipeId));
-  return c.json(buildShoppingList(weekStart, recipes, peopleCount));
+  return c.json(buildShoppingList(weekStart, recipes, peopleCount, week.selections));
 });
 
 // ── Week by start date ────────────────────────────────────────────────────
@@ -166,8 +169,8 @@ app.get("/weeks/:weekStart", async (c) => {
 });
 
 app.post("/weeks/:weekStart/generate", async (c) => {
-  const body = await c.req.json<{ daysPerWeek?: number }>().catch(() => ({} as { daysPerWeek?: number }));
-  const week = await generateWeek(c.req.param("weekStart"), body.daysPerWeek);
+  const body = await c.req.json<{ mealCounts?: MealCounts }>().catch(() => ({} as { mealCounts?: MealCounts }));
+  const week = await generateWeek(c.req.param("weekStart"), body.mealCounts);
   return c.json({ week }, 202);
 });
 
@@ -254,7 +257,7 @@ app.get("/weeks/:weekStart/shopping-list", async (c) => {
   const prefs = await db.getPreferences();
   const peopleCount = prefs?.peopleCount ?? DEFAULT_PREFERENCES.peopleCount;
   const recipes = await db.getCandidateRecipes(week.selections.map((s) => s.recipeId));
-  return c.json(buildShoppingList(weekStart, recipes, peopleCount));
+  return c.json(buildShoppingList(weekStart, recipes, peopleCount, week.selections));
 });
 
 // ── Recipes ────────────────────────────────────────────────────────────────

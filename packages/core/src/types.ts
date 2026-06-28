@@ -71,9 +71,17 @@ export type WeekStatus =
   | "skipped"
   | "error";
 
+export interface MealCounts {
+  breakfast: number;
+  lunch: number;
+  dinner: number;
+}
+
 export interface WeekSelection {
   recipeId: string;
   mealType: MealType;
+  /** How many times this meal is planned (default 1) */
+  quantity?: number;
 }
 
 export interface Week {
@@ -82,6 +90,8 @@ export interface Week {
   weekStart: string;
   status: WeekStatus;
   daysPerWeek: number;
+  /** Per-meal-type counts chosen by the user before generation */
+  mealCounts?: MealCounts;
   candidateRecipeIds: string[];
   selections: WeekSelection[];
   cookedRecipeIds: string[];

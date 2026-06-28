@@ -108,6 +108,27 @@ export async function getHighlyRatedRecipes(minStars = 4): Promise<Recipe[]> {
   return recipes.filter((r): r is Recipe => r !== null);
 }
 
+export async function getDislikedRecipes(): Promise<Array<{ title: string; notes?: string }>> {
+  const result = await ddb.send(
+    new ScanCommand({
+      TableName: TABLE_NAME,
+      FilterExpression: "begins_with(#SK, :ratingPrefix) AND (#makeAgain = :no OR #stars <= :lowStars)",
+      ExpressionAttributeNames: { "#SK": "SK", "#makeAgain": "makeAgain", "#stars": "stars" },
+      ExpressionAttributeValues: { ":ratingPrefix": "RATING#", ":no": false, ":lowStars": 2 },
+    })
+  );
+  const ratings = ((result.Items ?? []) as Record<string, unknown>[]);
+  const recipeIds = [...new Set(ratings.map((item) => ((item["PK"] as string) ?? "").replace("RECIPE#", "")))];
+  const recipes = await Promise.all(recipeIds.map((id) => getRecipe(id)));
+  return recipes
+    .filter((r): r is Recipe => r !== null)
+    .map((r) => {
+      const rating = ratings.find((item) => (item["PK"] as string) === `RECIPE#${r.id}`);
+      const notes = rating?.["notes"] as string | undefined;
+      return notes !== undefined ? { title: r.title, notes } : { title: r.title };
+    });
+}
+
 export async function getAllRatings(): Promise<Rating[]> {
   const result = await ddb.send(
     new ScanCommand({
