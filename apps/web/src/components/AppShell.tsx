@@ -30,21 +30,32 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
     navigate(path);
   };
 
-  // Close drawer on route change
   useEffect(() => {
     setDrawerOpen(false);
   }, [location.pathname]);
 
+  // Which top-level section is active
+  const activeSection = NAV_LINKS.find(
+    (l) => location.pathname === l.path || location.pathname.startsWith(l.path + "/")
+  );
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: "var(--paper)" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100dvh",
+        background: "var(--oat)",
+      }}
+    >
       {/* Top bar */}
       <header
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "0 16px",
-          height: 56,
+          padding: "0 20px",
+          height: 60,
           background: "var(--paper)",
           borderBottom: "1px solid var(--line)",
           flexShrink: 0,
@@ -59,10 +70,11 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
             background: "none",
             border: "none",
             cursor: "pointer",
-            fontSize: "0.78rem",
+            fontSize: "0.8rem",
             color: "var(--stone)",
-            letterSpacing: "0.03em",
-            padding: "6px 0",
+            letterSpacing: "0.02em",
+            padding: "4px 0",
+            minWidth: 60,
           }}
         >
           Sign out
@@ -71,9 +83,18 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
         {/* Wordmark (center) */}
         <button
           onClick={() => navigate("/choose")}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 0 }}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+            lineHeight: 0,
+            position: "absolute",
+            left: "50%",
+            transform: "translateX(-50%)",
+          }}
         >
-          <img src="/logo.png" alt="Cooking" style={{ height: 28, display: "block" }} />
+          <img src="/logo.png" alt="Cooking" style={{ height: 36, display: "block" }} />
         </button>
 
         {/* Hamburger (right) */}
@@ -88,6 +109,8 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
             display: "flex",
             flexDirection: "column",
             gap: 5,
+            minWidth: 60,
+            alignItems: "flex-end",
           }}
         >
           {[0, 1, 2].map((i) => (
@@ -95,7 +118,7 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
               key={i}
               style={{
                 display: "block",
-                width: 22,
+                width: i === 1 ? 16 : 22,
                 height: 2,
                 background: "var(--ink)",
                 borderRadius: 2,
@@ -105,25 +128,70 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
         </button>
       </header>
 
+      {/* Section tab strip (when inside a named section) */}
+      {activeSection && (
+        <div
+          style={{
+            display: "flex",
+            gap: 0,
+            padding: "0 20px",
+            background: "var(--paper)",
+            borderBottom: "1px solid var(--line)",
+            flexShrink: 0,
+          }}
+        >
+          {NAV_LINKS.slice(0, 3).map(({ label, path }) => {
+            const active = location.pathname === path || location.pathname.startsWith(path + "/");
+            return (
+              <button
+                key={path}
+                onClick={() => navigate(path)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "10px 16px 9px",
+                  fontSize: "0.82rem",
+                  fontWeight: active ? 600 : 400,
+                  color: active ? "var(--garden)" : "var(--stone)",
+                  borderBottom: `2px solid ${active ? "var(--garden)" : "transparent"}`,
+                  letterSpacing: "0.01em",
+                  transition: "color 0.15s, border-color 0.15s",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Page content */}
-      <main style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+      <main
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         {children}
       </main>
 
-      {/* Drawer overlay */}
+      {/* Overlay */}
       {drawerOpen && (
         <div
           onClick={() => setDrawerOpen(false)}
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(35,38,30,0.35)",
+            background: "rgba(35,38,30,0.4)",
             zIndex: 40,
           }}
         />
       )}
 
-      {/* Drawer panel */}
+      {/* Drawer */}
       <div
         style={{
           position: "fixed",
@@ -134,10 +202,10 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
           background: "var(--paper)",
           zIndex: 50,
           transform: drawerOpen ? "translateX(0)" : "translateX(100%)",
-          transition: "transform 0.22s ease",
+          transition: "transform 0.22s cubic-bezier(0.4,0,0.2,1)",
           display: "flex",
           flexDirection: "column",
-          boxShadow: "-4px 0 24px rgba(35,38,30,0.12)",
+          boxShadow: "-8px 0 32px rgba(35,38,30,0.14)",
         }}
       >
         {/* Drawer header */}
@@ -146,23 +214,26 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "16px 20px",
+            padding: "20px 20px 16px",
             borderBottom: "1px solid var(--line)",
           }}
         >
-          <span style={{ fontSize: "0.8rem", color: "var(--stone)" }}>
-            Hi, {name}
-          </span>
+          <div>
+            <div style={{ fontSize: "0.7rem", color: "var(--stone)", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 2 }}>
+              Signed in as
+            </div>
+            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--ink)" }}>{name}</div>
+          </div>
           <button
             onClick={() => setDrawerOpen(false)}
             style={{
               background: "none",
               border: "none",
               cursor: "pointer",
-              fontSize: "1.2rem",
+              fontSize: "1.1rem",
               color: "var(--stone)",
               lineHeight: 1,
-              padding: 4,
+              padding: 6,
             }}
           >
             ✕
@@ -170,7 +241,7 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
         </div>
 
         {/* Nav links */}
-        <nav style={{ flex: 1, padding: "12px 0" }}>
+        <nav style={{ flex: 1, padding: "8px 0" }}>
           {NAV_LINKS.map(({ label, path }) => {
             const active = location.pathname === path || location.pathname.startsWith(path + "/");
             return (
@@ -178,7 +249,8 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
                 key={path}
                 onClick={() => goTo(path)}
                 style={{
-                  display: "block",
+                  display: "flex",
+                  alignItems: "center",
                   width: "100%",
                   textAlign: "left",
                   background: active ? "var(--oat)" : "none",
@@ -191,14 +263,17 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
                   letterSpacing: "0.01em",
                 }}
               >
-                {label}
+                <span style={{ flex: 1 }}>{label}</span>
+                {active && (
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--garden)" }} />
+                )}
               </button>
             );
           })}
         </nav>
 
-        {/* Sign out at bottom */}
-        <div style={{ padding: "16px 24px", borderTop: "1px solid var(--line)" }}>
+        {/* Sign out */}
+        <div style={{ padding: "16px 24px 24px", borderTop: "1px solid var(--line)" }}>
           <button
             onClick={handleSignOut}
             style={{

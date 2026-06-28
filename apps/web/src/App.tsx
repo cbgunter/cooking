@@ -21,13 +21,23 @@ export default function App() {
 
   if (authed === null) return null;
 
+  const handleLogin = () => {
+    window.history.replaceState({}, "", "/choose");
+    setAuthed(true);
+  };
+
+  const handleSignOut = () => {
+    window.history.replaceState({}, "", "/");
+    setAuthed(false);
+  };
+
   if (!authed) {
-    return <LoginPage onLogin={() => setAuthed(true)} />;
+    return <LoginPage onLogin={handleLogin} />;
   }
 
   return (
     <BrowserRouter>
-      <AppShell onSignOut={() => setAuthed(false)}>
+      <AppShell onSignOut={handleSignOut}>
         <Routes>
           <Route path="/" element={<Navigate to="/choose" replace />} />
           <Route path="/choose" element={<ChoosePage />} />
@@ -38,7 +48,6 @@ export default function App() {
           <Route path="/cook/:weekStart" element={<CookWeekPage />} />
           <Route path="/recipes/:id" element={<RecipePage />} />
           <Route path="/preferences" element={<PreferencesPage />} />
-          {/* Legacy redirect */}
           <Route path="/week" element={<Navigate to="/choose" replace />} />
         </Routes>
       </AppShell>
