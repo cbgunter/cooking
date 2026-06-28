@@ -83,7 +83,7 @@ pending → selecting → shopping → cooking → done
 
 | Tab | Frontend | API endpoints |
 |---|---|---|
-| **Choose** | `ChoosePage.tsx`, `WeekDetailPage.tsx` | `GET/POST /weeks`, `POST /weeks/:id/generate`, `POST /weeks/:id/select`, `POST /weeks/:id/vote` |
+| **Choose** | `ChoosePage.tsx`, `WeekDetailPage.tsx` | `GET/POST /weeks`, `POST /weeks/:id/generate`, `POST /weeks/:id/topup`, `POST /weeks/:id/select`, `POST /weeks/:id/vote` |
 | **Shop** | `ShopPage.tsx`, `ShoppingListPage.tsx` | `GET /weeks/:id/shopping-list` |
 | **Cook** | `CookPage.tsx`, `CookWeekPage.tsx`, `RecipePage.tsx` | `POST /recipes/:id/cooked` |
 | **Eat** | `EatPage.tsx` | `GET /eat` |
@@ -98,6 +98,17 @@ Candidate counts: breakfast and lunch always generate **4 candidates** regardles
 Each meal type is generated in its own parallel Claude request so a truncation or API error on one type doesn't lose the others. If a type returns zero accepted candidates after retries, the week moves to `error` status.
 
 **Constraint filtering** (`packages/core/src/constraints.ts`): breakfast and lunch are exempt from the minimum prep-time floor — only dinner enforces it. All other constraints (calories, sodium, cost, max time, dislikes) apply to all meal types.
+
+## Top-up Flow (post-confirm regeneration)
+
+After confirming selections, if any meal type is short of its target count a "Missing meals" section appears in the week detail. Tapping "Get [type] options" triggers a per-type top-up:
+
+1. `POST /weeks/:weekStart/topup` sets `Week.topUpMealCounts` and async-invokes the Generate Lambda with `appendMode: true`
+2. Generate Lambda appends new recipe IDs to `candidateRecipeIds` without touching week status or existing selections, then clears `topUpMealCounts`
+3. Frontend polls on `topUpMealCounts` (5 s interval), shows a per-type spinner while in flight
+4. Once candidates arrive, inline cards with quantity steppers appear; "Add to plan" merges picks into `Week.selections` via the existing `POST /weeks/:weekStart/select` endpoint
+
+On top-up error the week stays in `shopping` — confirmed meals are unaffected. `topUpMealCounts` is cleared so the spinner stops and the user can retry.
 
 ## User Identity
 

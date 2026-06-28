@@ -101,6 +101,8 @@ export interface Week {
   confirmedBy?: string[];
   /** Human-readable reason set when status is "error" */
   errorMessage?: string;
+  /** Set while a per-type top-up generation is in flight; cleared when done */
+  topUpMealCounts?: MealCounts;
   /** ISO datetime */
   createdAt: string;
   updatedAt: string;

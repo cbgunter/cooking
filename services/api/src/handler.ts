@@ -240,6 +240,35 @@ app.post("/weeks/:weekStart/revert", async (c) => {
   return c.json({ week: updated });
 });
 
+app.post("/weeks/:weekStart/topup", async (c) => {
+  const weekStart = c.req.param("weekStart");
+  const body = await c.req.json<{ mealCounts: MealCounts }>();
+  const week = await db.getWeek(weekStart);
+  if (!week) return c.json({ error: "week not found" }, 404);
+
+  const updated = {
+    ...week,
+    topUpMealCounts: body.mealCounts,
+    updatedAt: new Date().toISOString(),
+  };
+  await db.saveWeek(updated);
+
+  const generateArn = process.env["GENERATE_LAMBDA_ARN"];
+  if (generateArn) {
+    await lambda.send(
+      new InvokeCommand({
+        FunctionName: generateArn,
+        InvocationType: "Event",
+        Payload: Buffer.from(
+          JSON.stringify({ weekStart, mealCounts: body.mealCounts, appendMode: true })
+        ),
+      })
+    );
+  }
+
+  return c.json({ week: updated });
+});
+
 app.post("/weeks/:weekStart/skip", async (c) => {
   const weekStart = c.req.param("weekStart");
   const now = new Date().toISOString();

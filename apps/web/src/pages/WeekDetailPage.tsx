@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import type { Recipe, Week, WeekSelection, MealType } from "@cooking/core";
+import type { Recipe, Week, WeekSelection, MealType, MealCounts } from "@cooking/core";
 import * as api from "../api.js";
 import { getCurrentUserEmail } from "../auth.js";
 
@@ -48,6 +48,8 @@ export default function WeekDetailPage() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [myEmail] = useState<string | null>(getCurrentUserEmail);
+  // Quantities for top-up candidates not yet added to confirmed selections
+  const [topUpQuantities, setTopUpQuantities] = useState<Map<string, number>>(new Map());
 
   const loadWeek = useCallback(async () => {
     if (!weekStart) return;
@@ -73,14 +75,17 @@ export default function WeekDetailPage() {
     loadWeek().finally(() => setLoading(false));
   }, [loadWeek]);
 
-  // Poll while pending
+  // Poll while pending or while a top-up is in flight
   useEffect(() => {
-    if (week?.status !== "pending") return;
+    const isPending = week?.status === "pending";
+    const isTopUp = !!week?.topUpMealCounts;
+    if (!isPending && !isTopUp) return;
     const id = setInterval(async () => {
       const { week: w, candidates: c } = await api.getWeekByStart(weekStart!);
-      if (w && w.status !== "pending") {
-        setWeek(w);
-        setCandidates(c);
+      if (!w) return;
+      setWeek(w);
+      setCandidates(c);
+      if (isPending && w.status !== "pending") {
         const qMap = new Map<string, number>();
         for (const sel of w.selections) {
           qMap.set(sel.recipeId, (qMap.get(sel.recipeId) ?? 0) + (sel.quantity ?? 1));
@@ -89,7 +94,7 @@ export default function WeekDetailPage() {
       }
     }, 5000);
     return () => clearInterval(id);
-  }, [week?.status, weekStart]);
+  }, [week?.status, week?.topUpMealCounts, weekStart]);
 
   const buildSelections = (): WeekSelection[] => {
     const sel: WeekSelection[] = [];
@@ -140,6 +145,33 @@ export default function WeekDetailPage() {
       }
       setQuantities(qMap);
       setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTopUp = async (mealCounts: MealCounts) => {
+    if (!weekStart) return;
+    const { week: updated } = await api.topUpWeek(weekStart, mealCounts);
+    setWeek(updated);
+  };
+
+  const handleAddTopUp = async () => {
+    if (!week || !weekStart) return;
+    setSaving(true);
+    try {
+      const newSelections: WeekSelection[] = [];
+      for (const [recipeId, qty] of topUpQuantities) {
+        if (qty === 0) continue;
+        const recipe = candidates.find((r) => r.id === recipeId);
+        if (!recipe) continue;
+        newSelections.push({ recipeId, mealType: recipe.mealType, quantity: qty });
+      }
+      const merged = [...week.selections, ...newSelections];
+      const { week: updated } = await api.selectMealsForWeek(weekStart, merged);
+      clearDraft(weekStart);
+      setTopUpQuantities(new Map());
+      setWeek(updated);
     } finally {
       setSaving(false);
     }
@@ -351,6 +383,18 @@ export default function WeekDetailPage() {
     const cookedIds = selIds.filter((id) => cookedSet.has(id));
     const byId = (id: string) => candidates.find((r) => r.id === id);
 
+    // Compute which meal types the user is still short on
+    const selectedByType: Record<MealType, number> = { breakfast: 0, lunch: 0, dinner: 0 };
+    for (const sel of week.selections) {
+      selectedByType[sel.mealType] = (selectedByType[sel.mealType] ?? 0) + (sel.quantity ?? 1);
+    }
+    const missingTypes = MEAL_ORDER.filter(
+      (t) => (week.mealCounts?.[t] ?? 0) > 0 && selectedByType[t] < (week.mealCounts?.[t] ?? 0)
+    );
+
+    const selectedIds = new Set(week.selections.map((s) => s.recipeId));
+    const topUpTotal = Array.from(topUpQuantities.values()).reduce((s, q) => s + q, 0);
+
     return (
       <PageShell title={`Week of ${label}`} onBack={back}>
         {week.confirmedBy && week.confirmedBy.length > 0 && (
@@ -403,6 +447,75 @@ export default function WeekDetailPage() {
               All meals cooked this week!
             </p>
           </div>
+        )}
+
+        {/* Missing meal types — top-up flow */}
+        {missingTypes.length > 0 && (
+          <section style={{ margin: "0 16px 24px" }}>
+            <h2 style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--stone)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>
+              Missing meals
+            </h2>
+            {missingTypes.map((type) => {
+              const isGenerating = !!week.topUpMealCounts?.[type];
+              const newCandidates = candidates.filter(
+                (r) => r.mealType === type && !selectedIds.has(r.id)
+              );
+              return (
+                <div key={type} style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--ink)", textTransform: "capitalize", marginBottom: 8 }}>
+                    {type}
+                  </div>
+                  {isGenerating ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0" }}>
+                      <Spinner size={16} />
+                      <span style={{ fontSize: "0.83rem", color: "var(--stone)" }}>
+                        Finding {type} options…
+                      </span>
+                    </div>
+                  ) : newCandidates.length > 0 ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {newCandidates.map((r) => {
+                        const qty = topUpQuantities.get(r.id) ?? 0;
+                        return (
+                          <RecipeCard
+                            key={r.id}
+                            recipe={r}
+                            quantity={qty}
+                            onQuantityChange={(delta) => {
+                              setTopUpQuantities((prev) => {
+                                const next = new Map(prev);
+                                next.set(r.id, Math.max(0, (prev.get(r.id) ?? 0) + delta));
+                                return next;
+                              });
+                            }}
+                            onDetail={() => navigate(`/recipes/${r.id}`, { state: { weekStart } })}
+                          />
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <button
+                      className="btn btn-outline"
+                      style={{ fontSize: "0.83rem", width: "100%" }}
+                      onClick={() => handleTopUp({ breakfast: 0, lunch: 0, dinner: 0, [type]: week.mealCounts?.[type] ?? 1 })}
+                    >
+                      Get {type} options
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {topUpTotal > 0 && (
+              <button
+                className="btn btn-primary"
+                style={{ width: "100%", marginTop: 4 }}
+                onClick={handleAddTopUp}
+                disabled={saving}
+              >
+                {saving ? "Saving…" : `Add ${topUpTotal} meal${topUpTotal !== 1 ? "s" : ""} to plan`}
+              </button>
+            )}
+          </section>
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "4px 16px 24px" }}>
@@ -648,17 +761,18 @@ function qBtnStyle(disabled: boolean): React.CSSProperties {
   };
 }
 
-function Spinner() {
+function Spinner({ size = 32 }: { size?: number }) {
   return (
     <div
       style={{
-        width: 32,
-        height: 32,
-        border: "3px solid var(--line)",
+        width: size,
+        height: size,
+        border: `${size > 24 ? 3 : 2}px solid var(--line)`,
         borderTopColor: "var(--garden)",
         borderRadius: "50%",
         animation: "spin 0.8s linear infinite",
-        margin: "0 auto",
+        flexShrink: 0,
+        margin: size === 32 ? "0 auto" : undefined,
       }}
     />
   );

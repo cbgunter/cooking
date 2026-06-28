@@ -21,20 +21,30 @@ async function getAnthropicKey(): Promise<string> {
 interface GenerateEvent {
   weekStart?: string;
   mealCounts?: MealCounts;
+  /** When true, append new candidates to an existing week instead of replacing */
+  appendMode?: boolean;
 }
 
 export const handler: Handler<GenerateEvent> = async (event) => {
   const weekStart = event.weekStart ?? upcomingMondayISO();
+  const appendMode = event.appendMode ?? false;
   try {
-    await run(weekStart, event.mealCounts);
+    await run(weekStart, event.mealCounts, appendMode);
   } catch (err) {
-    console.error(JSON.stringify({ weekStart, error: String(err) }));
+    console.error(JSON.stringify({ weekStart, appendMode, error: String(err) }));
     const failed = await db.getWeek(weekStart);
     if (failed) {
-      const errorMessage = isAnthropicError(err)
-        ? "Claude API is unavailable — tap to try again"
-        : "Generation failed unexpectedly — tap to try again";
-      await db.saveWeek({ ...failed, status: "error", errorMessage, updatedAt: new Date().toISOString() });
+      if (appendMode) {
+        // Don't mark the whole week as error — confirmed meals are still valid.
+        // Just clear the in-progress indicator so the UI stops spinning.
+        const { topUpMealCounts: _removed, ...rest } = failed;
+        await db.saveWeek({ ...rest, updatedAt: new Date().toISOString() });
+      } else {
+        const errorMessage = isAnthropicError(err)
+          ? "Claude API is unavailable — tap to try again"
+          : "Generation failed unexpectedly — tap to try again";
+        await db.saveWeek({ ...failed, status: "error", errorMessage, updatedAt: new Date().toISOString() });
+      }
     }
     throw err;
   }
@@ -54,7 +64,7 @@ function isAnthropicError(err: unknown): boolean {
   );
 }
 
-async function run(weekStart: string, eventMealCounts?: MealCounts) {
+async function run(weekStart: string, eventMealCounts?: MealCounts, appendMode = false) {
   const apiKey = await getAnthropicKey();
 
   const [prefs, recentRecipes, highlyRatedRecipes, dislikedRecipes, ratings, week] =
@@ -90,23 +100,41 @@ async function run(weekStart: string, eventMealCounts?: MealCounts) {
     JSON.stringify({ weekStart, mealCounts, totalGenerated, totalRejected, saved: recipes.length })
   );
 
+  const now = new Date().toISOString();
+
   if (recipes.length === 0) {
-    console.warn(JSON.stringify({ weekStart, warning: "No valid recipe candidates generated" }));
+    console.warn(JSON.stringify({ weekStart, appendMode, warning: "No valid recipe candidates generated" }));
     const noResults = await db.getWeek(weekStart);
     if (noResults) {
-      await db.saveWeek({
-        ...noResults,
-        status: "error",
-        errorMessage: "No recipes matched your constraints — tap to try again or adjust preferences",
-        updatedAt: new Date().toISOString(),
-      });
+      if (appendMode) {
+        // Just clear the spinner — confirmed meals are unaffected.
+        const { topUpMealCounts: _removed, ...rest } = noResults;
+        await db.saveWeek({ ...rest, updatedAt: now });
+      } else {
+        await db.saveWeek({
+          ...noResults,
+          status: "error",
+          errorMessage: "No recipes matched your constraints — tap to try again or adjust preferences",
+          updatedAt: now,
+        });
+      }
     }
     return;
   }
 
   await db.saveRecipes(recipes);
 
-  const now = new Date().toISOString();
+  if (appendMode && week) {
+    // Append new candidates without touching status or existing selections.
+    const { topUpMealCounts: _removed, ...weekRest } = week;
+    await db.saveWeek({
+      ...weekRest,
+      candidateRecipeIds: [...week.candidateRecipeIds, ...recipes.map((r) => r.id)],
+      updatedAt: now,
+    });
+    return;
+  }
+
   await db.saveWeek({
     id: weekStart,
     weekStart,
