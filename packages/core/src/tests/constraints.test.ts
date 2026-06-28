@@ -56,12 +56,6 @@ describe("validateRecipeConstraints", () => {
     expect(v.some((x) => x.field === "ingredients")).toBe(true);
   });
 
-  it("catches missing equipment", () => {
-    const r = { ...baseRecipe, equipment: ["sous_vide" as const] };
-    const p = { ...prefs, equipment: ["stove" as const] };
-    const v = validateRecipeConstraints(r, p);
-    expect(v.some((x) => x.field === "equipment")).toBe(true);
-  });
 });
 
 describe("passesConstraints", () => {

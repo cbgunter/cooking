@@ -60,16 +60,6 @@ export function validateRecipeConstraints(
     });
   }
 
-  const missingEquipment = recipe.equipment.find(
-    (e) => !prefs.equipment.includes(e)
-  );
-  if (missingEquipment) {
-    violations.push({
-      field: "equipment",
-      message: `Requires equipment not available: ${missingEquipment}`,
-    });
-  }
-
   return violations;
 }
 

@@ -53,8 +53,6 @@ export function buildMenuGenerationPrompt(ctx: GenerationContext): string {
       "Lean toward known favorites and reliable classics. New recipes should be gentle variations.",
   };
 
-  const equipment = prefs.equipment.join(", ");
-
   const existing = ctx.existingTitles?.length
     ? `\n## Already accepted (do not repeat)\n${ctx.existingTitles.map((t) => `- ${t}`).join("\n")}\n`
     : "";
@@ -87,7 +85,6 @@ ${distributionLines}
 - Max sodium per serving: ${prefs.nutrition.maxSodiumMgPerMeal} mg
 - Total prep + cook time: ${prefs.prepTimeRange.minMinutes}–${prefs.prepTimeRange.maxMinutes} minutes
 - Cost per serving: breakfast ≤$${prefs.costCaps.breakfast}, lunch ≤$${prefs.costCaps.lunch}, dinner ≤$${prefs.costCaps.dinner}
-- Available equipment: ${equipment}
 - Avoid (ingredients/cuisines): ${ingredientDislikes}
 
 ## Preferences

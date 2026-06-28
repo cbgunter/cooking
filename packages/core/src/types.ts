@@ -119,7 +119,6 @@ export interface HouseholdPreferences {
   peopleCount: number;
   /** default number of days to plan; overrideable per week */
   defaultDaysPerWeek: number;
-  equipment: Equipment[];
   /** ingredient names or cuisine types to avoid */
   dislikes: string[];
   /** cuisine types to prefer */

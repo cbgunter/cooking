@@ -1,29 +1,7 @@
 import { useState, useEffect } from "react";
-import type { HouseholdPreferences, Equipment } from "@cooking/core";
+import type { HouseholdPreferences } from "@cooking/core";
 import { DEFAULT_PREFERENCES } from "@cooking/core";
 import * as api from "../api.js";
-
-const ALL_EQUIPMENT: Equipment[] = [
-  "stove",
-  "oven",
-  "grill",
-  "sous_vide",
-  "crockpot",
-  "dutch_oven",
-  "microwave",
-  "air_fryer",
-];
-
-const EQUIPMENT_LABELS: Record<Equipment, string> = {
-  stove: "Stove",
-  oven: "Oven",
-  grill: "Grill",
-  sous_vide: "Sous vide",
-  crockpot: "Crockpot",
-  dutch_oven: "Dutch oven",
-  microwave: "Microwave",
-  air_fryer: "Air fryer",
-};
 
 export default function PreferencesPage() {
   const [prefs, setPrefs] = useState<HouseholdPreferences>(DEFAULT_PREFERENCES);
@@ -41,11 +19,6 @@ export default function PreferencesPage() {
 
   const update = (patch: Partial<HouseholdPreferences>) =>
     setPrefs((p) => ({ ...p, ...patch }));
-
-  const toggleEquipment = (eq: Equipment) => {
-    const has = prefs.equipment.includes(eq);
-    update({ equipment: has ? prefs.equipment.filter((e) => e !== eq) : [...prefs.equipment, eq] });
-  };
 
   const addDislike = () => {
     const v = dislikeInput.trim();
@@ -198,44 +171,6 @@ export default function PreferencesPage() {
                 {level}
               </button>
             ))}
-          </div>
-        </Section>
-
-        {/* Equipment */}
-        <Section title="Equipment">
-          <p style={{ fontSize: "0.78rem", color: "var(--slate-light)", marginTop: -4 }}>
-            Tap to toggle. Filled = available.
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {ALL_EQUIPMENT.map((eq) => {
-              const active = prefs.equipment.includes(eq);
-              return (
-                <button
-                  key={eq}
-                  onClick={() => toggleEquipment(eq)}
-                  aria-pressed={active}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    borderRadius: 999,
-                    padding: "7px 14px",
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    border: `1.5px solid ${active ? "var(--garden)" : "var(--border)"}`,
-                    background: active ? "var(--garden)" : "#fff",
-                    color: active ? "var(--paper)" : "var(--slate-light)",
-                    transition: "background 0.15s, border-color 0.15s, color 0.15s",
-                  }}
-                >
-                  <span style={{ fontSize: "0.85rem", lineHeight: 1 }}>
-                    {active ? "✓" : "+"}
-                  </span>
-                  {EQUIPMENT_LABELS[eq]}
-                </button>
-              );
-            })}
           </div>
         </Section>
 

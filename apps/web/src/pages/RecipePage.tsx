@@ -1,7 +1,18 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import type { Recipe } from "@cooking/core";
+import type { Recipe, Equipment } from "@cooking/core";
 import * as api from "../api.js";
+
+const EQUIPMENT_LABELS: Record<Equipment, string> = {
+  stove: "Stove",
+  oven: "Oven",
+  grill: "Grill",
+  sous_vide: "Sous vide",
+  crockpot: "Crockpot",
+  dutch_oven: "Dutch oven",
+  microwave: "Microwave",
+  air_fryer: "Air fryer",
+};
 
 export default function RecipePage() {
   const { id } = useParams<{ id: string }>();
@@ -139,6 +150,19 @@ export default function RecipePage() {
                 </div>
               ))}
             </div>
+
+            {recipe.equipment.length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <h2 style={{ marginBottom: 10 }}>Equipment</h2>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {recipe.equipment.map((eq) => (
+                    <span key={eq} className="tag">
+                      {EQUIPMENT_LABELS[eq] ?? eq}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {recipe.reuseNotes && (
               <p className="text-xs text-muted" style={{ marginTop: 16, lineHeight: 1.6 }}>

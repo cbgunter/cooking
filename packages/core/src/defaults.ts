@@ -3,7 +3,6 @@ import type { HouseholdPreferences } from "./types.js";
 export const DEFAULT_PREFERENCES: HouseholdPreferences = {
   peopleCount: 2,
   defaultDaysPerWeek: 5,
-  equipment: ["stove", "oven", "grill", "crockpot", "dutch_oven"],
   dislikes: [],
   cuisinePreferences: [],
   costCaps: {
