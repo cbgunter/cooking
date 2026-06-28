@@ -185,9 +185,9 @@ export default function PreferencesPage() {
                 style={{
                   padding: "10px 16px",
                   borderRadius: 10,
-                  border: `1.5px solid ${prefs.adventureLevel === level ? "var(--clay)" : "var(--border)"}`,
-                  background: prefs.adventureLevel === level ? "#fef0eb" : "#fff",
-                  color: prefs.adventureLevel === level ? "var(--clay)" : "var(--slate)",
+                  border: `1.5px solid ${prefs.adventureLevel === level ? "var(--garden)" : "var(--border)"}`,
+                  background: prefs.adventureLevel === level ? "var(--garden)" : "#fff",
+                  color: prefs.adventureLevel === level ? "var(--paper)" : "var(--slate)",
                   textAlign: "left",
                   fontWeight: prefs.adventureLevel === level ? 600 : 400,
                   cursor: "pointer",
@@ -203,6 +203,9 @@ export default function PreferencesPage() {
 
         {/* Equipment */}
         <Section title="Equipment">
+          <p style={{ fontSize: "0.78rem", color: "var(--slate-light)", marginTop: -4 }}>
+            Tap to toggle. Filled = available.
+          </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {ALL_EQUIPMENT.map((eq) => {
               const active = prefs.equipment.includes(eq);
@@ -210,16 +213,25 @@ export default function PreferencesPage() {
                 <button
                   key={eq}
                   onClick={() => toggleEquipment(eq)}
-                  className="tag"
+                  aria-pressed={active}
                   style={{
-                    background: active ? "#fef0eb" : undefined,
-                    borderColor: active ? "var(--clay)" : undefined,
-                    color: active ? "var(--clay)" : undefined,
-                    cursor: "pointer",
-                    padding: "6px 12px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    borderRadius: 999,
+                    padding: "7px 14px",
                     fontSize: "0.8rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    border: `1.5px solid ${active ? "var(--garden)" : "var(--border)"}`,
+                    background: active ? "var(--garden)" : "#fff",
+                    color: active ? "var(--paper)" : "var(--slate-light)",
+                    transition: "background 0.15s, border-color 0.15s, color 0.15s",
                   }}
                 >
+                  <span style={{ fontSize: "0.85rem", lineHeight: 1 }}>
+                    {active ? "✓" : "+"}
+                  </span>
                   {EQUIPMENT_LABELS[eq]}
                 </button>
               );
