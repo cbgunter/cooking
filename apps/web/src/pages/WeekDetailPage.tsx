@@ -15,6 +15,28 @@ function formatWeekDate(weekStart: string): string {
   });
 }
 
+function draftKey(weekStart: string) {
+  return `week-draft-${weekStart}`;
+}
+
+function saveDraft(weekStart: string, quantities: Map<string, number>) {
+  sessionStorage.setItem(draftKey(weekStart), JSON.stringify(Object.fromEntries(quantities)));
+}
+
+function loadDraft(weekStart: string): Map<string, number> | null {
+  try {
+    const raw = sessionStorage.getItem(draftKey(weekStart));
+    if (!raw) return null;
+    return new Map(Object.entries(JSON.parse(raw) as Record<string, number>));
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft(weekStart: string) {
+  sessionStorage.removeItem(draftKey(weekStart));
+}
+
 export default function WeekDetailPage() {
   const { weekStart } = useParams<{ weekStart: string }>();
   const navigate = useNavigate();
@@ -33,9 +55,15 @@ export default function WeekDetailPage() {
     setWeek(w);
     setCandidates(c);
     if (w) {
-      const qMap = new Map<string, number>();
-      for (const sel of w.selections) {
-        qMap.set(sel.recipeId, (qMap.get(sel.recipeId) ?? 0) + (sel.quantity ?? 1));
+      // While the user is picking (selecting status, no confirmed selections yet),
+      // prefer any in-progress draft over stale server data so navigation to a
+      // recipe detail page doesn't wipe out unsaved quantity choices.
+      const draft = w.status === "selecting" ? loadDraft(weekStart) : null;
+      const qMap = draft ?? new Map<string, number>();
+      if (!draft) {
+        for (const sel of w.selections) {
+          qMap.set(sel.recipeId, (qMap.get(sel.recipeId) ?? 0) + (sel.quantity ?? 1));
+        }
       }
       setQuantities(qMap);
     }
@@ -81,6 +109,7 @@ export default function WeekDetailPage() {
     setSaving(true);
     try {
       const { week: updated } = await api.selectMealsForWeek(weekStart, buildSelections());
+      clearDraft(weekStart);
       setWeek(updated);
       setEditing(false);
     } finally {
@@ -133,6 +162,7 @@ export default function WeekDetailPage() {
     setQuantities((prev) => {
       const next = new Map(prev);
       next.set(recipeId, Math.max(0, qty));
+      if (weekStart) saveDraft(weekStart, next);
       return next;
     });
   };
