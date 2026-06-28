@@ -1,5 +1,16 @@
 # Backlog
 
+## Per-feature CLAUDE.md files
+Move page files into feature subfolders and add a CLAUDE.md to each:
+- `apps/web/src/pages/choose/` — ChoosePage.tsx, WeekDetailPage.tsx, WeekPage.tsx
+- `apps/web/src/pages/shop/` — ShopPage.tsx, ShoppingListPage.tsx
+- `apps/web/src/pages/cook/` — CookPage.tsx, CookWeekPage.tsx, RecipePage.tsx
+- `apps/web/src/pages/eat/` — EatPage.tsx
+- `apps/web/src/pages/settings/` — PreferencesPage.tsx
+- Also add `services/api/CLAUDE.md` covering the DynamoDB access patterns and endpoint map in depth
+
+Each CLAUDE.md should document: what the feature does, which API endpoints it owns, data model quirks, and known edge cases. After moving files, update imports in App.tsx and any cross-page navigate calls.
+
 ## Multi-user meal selection
 Currently the week is a single shared state — whoever hits "confirm selections" last wins. For two people choosing async:
 - Add per-user votes/preferences on candidates (e.g. thumbs up/down per recipe per user)
