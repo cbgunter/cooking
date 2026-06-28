@@ -85,6 +85,10 @@ export interface Week {
   candidateRecipeIds: string[];
   selections: WeekSelection[];
   cookedRecipeIds: string[];
+  /** Per-user thumbs up/down votes on candidate recipes (email → recipeId → vote) */
+  votes?: { [userEmail: string]: { [recipeId: string]: "up" | "down" } };
+  /** Emails of users who have confirmed the final meal selections */
+  confirmedBy?: string[];
   /** ISO datetime */
   createdAt: string;
   updatedAt: string;

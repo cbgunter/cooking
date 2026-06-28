@@ -62,6 +62,15 @@ export const selectMealsForWeek = (
 export const skipWeekByStart = (weekStart: string) =>
   req<{ week: Week }>(`/weeks/${weekStart}/skip`, { method: "POST" });
 
+export const voteOnRecipe = (weekStart: string, recipeId: string, vote: "up" | "down" | null) =>
+  req<{ week: Week }>(`/weeks/${weekStart}/vote`, {
+    method: "POST",
+    body: JSON.stringify({ recipeId, vote }),
+  });
+
+export const revertWeek = (weekStart: string) =>
+  req<{ week: Week }>(`/weeks/${weekStart}/revert`, { method: "POST" });
+
 export const getShoppingListForWeek = (weekStart: string) =>
   req<ShoppingList>(`/weeks/${weekStart}/shopping-list`);
 

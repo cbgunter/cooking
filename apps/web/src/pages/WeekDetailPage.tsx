@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { Recipe, Week, WeekSelection, MealType } from "@cooking/core";
 import * as api from "../api.js";
+import { getCurrentUserEmail } from "../auth.js";
 
 const MEAL_ORDER: MealType[] = ["breakfast", "lunch", "dinner"];
 
@@ -23,6 +24,8 @@ export default function WeekDetailPage() {
   const [filter, setFilter] = useState<MealType | "all">("all");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [myEmail] = useState<string | null>(getCurrentUserEmail);
 
   useEffect(() => {
     if (!weekStart) return;
@@ -57,6 +60,7 @@ export default function WeekDetailPage() {
     try {
       const { week: updated } = await api.selectMealsForWeek(weekStart, selected, week.daysPerWeek);
       setWeek(updated);
+      setEditing(false);
     } finally {
       setSaving(false);
     }
@@ -73,6 +77,32 @@ export default function WeekDetailPage() {
     }
   };
 
+  const handleRevert = async () => {
+    if (!weekStart) return;
+    setSaving(true);
+    try {
+      const { week: updated } = await api.revertWeek(weekStart);
+      setWeek(updated);
+      setSelected(updated.selections);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleVote = useCallback(
+    async (recipeId: string, vote: "up" | "down" | null) => {
+      if (!weekStart) return;
+      try {
+        const { week: updated } = await api.voteOnRecipe(weekStart, recipeId, vote);
+        setWeek(updated);
+      } catch (err) {
+        console.error("Vote failed:", err);
+      }
+    },
+    [weekStart]
+  );
+
   const toggleRecipe = (recipe: Recipe) => {
     const already = selected.find((s) => s.recipeId === recipe.id);
     setSelected(
@@ -80,6 +110,11 @@ export default function WeekDetailPage() {
         ? selected.filter((s) => s.recipeId !== recipe.id)
         : [...selected, { recipeId: recipe.id, mealType: recipe.mealType }]
     );
+  };
+
+  const enterEditMode = () => {
+    setSelected(week?.selections ?? []);
+    setEditing(true);
   };
 
   const label = weekStart ? formatWeekDate(weekStart) : "";
@@ -108,6 +143,98 @@ export default function WeekDetailPage() {
     );
   }
 
+  // Selecting view — also used when editing shopping/cooking selections
+  if (week?.status === "selecting" || editing) {
+    const shown = filter === "all" ? candidates : candidates.filter((r) => r.mealType === filter);
+    const isSelected = (r: Recipe) => selected.some((s) => s.recipeId === r.id);
+
+    return (
+      <PageShell title={`Week of ${label}`} onBack={editing ? () => setEditing(false) : back}>
+        <div className="row gap-2" style={{ padding: "0 16px 12px", overflowX: "auto" }}>
+          {(["all", ...MEAL_ORDER] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setFilter(m)}
+              className="btn"
+              style={{
+                padding: "6px 14px",
+                fontSize: "0.8rem",
+                background: filter === m ? "var(--clay)" : "#fff",
+                color: filter === m ? "#fff" : "var(--slate)",
+                border: `1.5px solid ${filter === m ? "var(--clay)" : "var(--border)"}`,
+                borderRadius: 20,
+                flexShrink: 0,
+              }}
+            >
+              {m === "all" ? "All" : m.charAt(0).toUpperCase() + m.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        <div className="stack gap-3" style={{ padding: "0 16px" }}>
+          {shown.map((r) => (
+            <RecipeCard
+              key={r.id}
+              recipe={r}
+              selected={isSelected(r)}
+              week={week}
+              myEmail={myEmail}
+              onClick={() => toggleRecipe(r)}
+              onVote={handleVote}
+              showCheckbox
+            />
+          ))}
+        </div>
+
+        <div
+          className="stack gap-2"
+          style={{
+            padding: "20px 16px",
+            position: "sticky",
+            bottom: 72,
+            background: "linear-gradient(transparent, var(--ivory) 20%)",
+          }}
+        >
+          <button
+            className="btn btn-primary"
+            onClick={handleConfirm}
+            disabled={selected.length === 0 || saving}
+          >
+            {saving
+              ? "Saving…"
+              : editing
+              ? `Save ${selected.length} meal${selected.length !== 1 ? "s" : ""}`
+              : `Confirm ${selected.length} meal${selected.length !== 1 ? "s" : ""}`}
+          </button>
+          {editing ? (
+            <div className="row gap-2">
+              <button
+                className="btn btn-ghost text-sm"
+                style={{ flex: 1 }}
+                onClick={() => setEditing(false)}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-ghost text-sm"
+                style={{ flex: 1 }}
+                onClick={handleRevert}
+                disabled={saving}
+              >
+                Revert to selecting
+              </button>
+            </div>
+          ) : (
+            <button className="btn btn-ghost text-sm" onClick={handleSkip} disabled={saving}>
+              Skip this week
+            </button>
+          )}
+        </div>
+      </PageShell>
+    );
+  }
+
   if (week?.status === "shopping" || week?.status === "cooking") {
     const cookedSet = new Set(week.cookedRecipeIds);
     const remaining = candidates.filter(
@@ -117,6 +244,11 @@ export default function WeekDetailPage() {
 
     return (
       <PageShell title={label} onBack={back}>
+        {week.confirmedBy && week.confirmedBy.length > 0 && (
+          <p style={{ fontSize: "0.75rem", color: "var(--slate-light)", padding: "0 16px 4px" }}>
+            Confirmed by {week.confirmedBy.map((e) => e.split("@")[0]).join(" & ")}
+          </p>
+        )}
         {remaining.length > 0 && (
           <section style={{ marginBottom: 24 }}>
             <h2 style={{ padding: "0 16px 10px" }}>Up next</h2>
@@ -152,7 +284,7 @@ export default function WeekDetailPage() {
             </p>
           </div>
         )}
-        <div style={{ padding: "4px 16px 16px" }}>
+        <div className="stack gap-2" style={{ padding: "4px 16px 16px" }}>
           <button
             className="btn btn-outline"
             style={{ width: "100%" }}
@@ -160,83 +292,27 @@ export default function WeekDetailPage() {
           >
             View shopping list
           </button>
-        </div>
-      </PageShell>
-    );
-  }
-
-  if (!week || week.status === "done" || week.status === "skipped") {
-    return (
-      <PageShell title={label} onBack={back}>
-        <div style={{ textAlign: "center", padding: "48px 16px" }}>
-          <p className="text-muted">
-            {week?.status === "skipped" ? "You skipped this week." : "Nothing here yet."}
-          </p>
-          <button className="btn btn-outline" style={{ marginTop: 16 }} onClick={back}>
-            Back to weeks
-          </button>
-        </div>
-      </PageShell>
-    );
-  }
-
-  // selecting
-  const shown = filter === "all" ? candidates : candidates.filter((r) => r.mealType === filter);
-  const isSelected = (r: Recipe) => selected.some((s) => s.recipeId === r.id);
-
-  return (
-    <PageShell title={`Week of ${label}`} onBack={back}>
-      <div className="row gap-2" style={{ padding: "0 16px 12px", overflowX: "auto" }}>
-        {(["all", ...MEAL_ORDER] as const).map((m) => (
           <button
-            key={m}
-            onClick={() => setFilter(m)}
-            className="btn"
-            style={{
-              padding: "6px 14px",
-              fontSize: "0.8rem",
-              background: filter === m ? "var(--clay)" : "#fff",
-              color: filter === m ? "#fff" : "var(--slate)",
-              border: `1.5px solid ${filter === m ? "var(--clay)" : "var(--border)"}`,
-              borderRadius: 20,
-              flexShrink: 0,
-            }}
+            className="btn btn-ghost"
+            style={{ width: "100%", fontSize: "0.85rem" }}
+            onClick={enterEditMode}
           >
-            {m === "all" ? "All" : m.charAt(0).toUpperCase() + m.slice(1)}
+            Edit meals
           </button>
-        ))}
-      </div>
+        </div>
+      </PageShell>
+    );
+  }
 
-      <div className="stack gap-3" style={{ padding: "0 16px" }}>
-        {shown.map((r) => (
-          <RecipeCard
-            key={r.id}
-            recipe={r}
-            selected={isSelected(r)}
-            onClick={() => toggleRecipe(r)}
-            showCheckbox
-          />
-        ))}
-      </div>
-
-      <div
-        className="stack gap-2"
-        style={{
-          padding: "20px 16px",
-          position: "sticky",
-          bottom: 72,
-          background: "linear-gradient(transparent, var(--ivory) 20%)",
-        }}
-      >
-        <button
-          className="btn btn-primary"
-          onClick={handleConfirm}
-          disabled={selected.length === 0 || saving}
-        >
-          {saving ? "Saving…" : `Confirm ${selected.length} meal${selected.length !== 1 ? "s" : ""}`}
-        </button>
-        <button className="btn btn-ghost text-sm" onClick={handleSkip} disabled={saving}>
-          Skip this week
+  // done, skipped, error, or no week
+  return (
+    <PageShell title={label} onBack={back}>
+      <div style={{ textAlign: "center", padding: "48px 16px" }}>
+        <p className="text-muted">
+          {week?.status === "skipped" ? "You skipped this week." : "Nothing here yet."}
+        </p>
+        <button className="btn btn-outline" style={{ marginTop: 16 }} onClick={back}>
+          Back to weeks
         </button>
       </div>
     </PageShell>
@@ -289,13 +365,30 @@ function RecipeCard({
   selected,
   onClick,
   showCheckbox,
+  week,
+  myEmail,
+  onVote,
 }: {
   recipe: Recipe;
   selected?: boolean;
   onClick: () => void;
   showCheckbox?: boolean;
+  week?: Week | null;
+  myEmail?: string | null;
+  onVote?: (recipeId: string, vote: "up" | "down" | null) => void;
 }) {
   const totalMin = recipe.prepMinutes + recipe.cookMinutes;
+
+  let upCount = 0;
+  let downCount = 0;
+  if (week?.votes) {
+    for (const userVotes of Object.values(week.votes)) {
+      if (userVotes[recipe.id] === "up") upCount++;
+      if (userVotes[recipe.id] === "down") downCount++;
+    }
+  }
+  const myVote = (myEmail && week?.votes?.[myEmail]?.[recipe.id]) ?? null;
+
   return (
     <div
       className="card"
@@ -333,7 +426,7 @@ function RecipeCard({
       <p className="text-sm text-muted" style={{ marginBottom: 10, lineHeight: 1.4 }}>
         {recipe.description}
       </p>
-      <div className="row gap-3 text-xs text-muted">
+      <div className="row gap-3 text-xs text-muted" style={{ marginBottom: onVote ? 10 : 0 }}>
         <span>{recipe.cuisine}</span>
         <span>·</span>
         <span>{totalMin} min</span>
@@ -342,6 +435,37 @@ function RecipeCard({
         <span>·</span>
         <span>${recipe.costPerServing.toFixed(2)}/person</span>
       </div>
+      {onVote && (
+        <div className="row gap-2" onClick={(e) => e.stopPropagation()}>
+          {(["up", "down"] as const).map((v) => {
+            const count = v === "up" ? upCount : downCount;
+            const isMe = myVote === v;
+            const activeColor = v === "up" ? "#059669" : "#DC2626";
+            const activeBg = v === "up" ? "#D1FAE5" : "#FEE2E2";
+            return (
+              <button
+                key={v}
+                onClick={() => onVote(recipe.id, isMe ? null : v)}
+                style={{
+                  background: isMe ? activeBg : "transparent",
+                  border: `1.5px solid ${isMe ? activeColor : "var(--border)"}`,
+                  borderRadius: 20,
+                  padding: "3px 10px",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                  color: isMe ? activeColor : "var(--slate-light)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                {v === "up" ? "👍" : "👎"}
+                {count > 0 && <span>{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

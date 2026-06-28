@@ -12,6 +12,18 @@ const lambda = new LambdaClient({});
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+function getUserEmail(authHeader: string | undefined): string | null {
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  try {
+    const part = authHeader.split(" ")[1]?.split(".")[1];
+    if (!part) return null;
+    const json = Buffer.from(part, "base64url").toString();
+    return (JSON.parse(json) as Record<string, unknown>)["email"] as string ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function upcomingMondayISO(): string {
   const now = new Date();
   const day = now.getDay();
@@ -106,12 +118,15 @@ app.post("/weeks/current/select", async (c) => {
   if (!weekStart) return c.json({ error: "no current week" }, 404);
   const week = await db.getWeek(weekStart);
   if (!week) return c.json({ error: "week not found" }, 404);
+  const userEmail = getUserEmail(c.req.header("Authorization"));
   const body = await c.req.json<{ selections: WeekSelection[]; daysPerWeek?: number }>();
+  const confirmedBy = [...new Set([...(week.confirmedBy ?? []), ...(userEmail ? [userEmail] : [])])];
   const updated = {
     ...week,
     selections: body.selections,
     daysPerWeek: body.daysPerWeek ?? week.daysPerWeek,
     status: "shopping" as const,
+    confirmedBy,
     updatedAt: new Date().toISOString(),
   };
   await db.saveWeek(updated);
@@ -160,12 +175,56 @@ app.post("/weeks/:weekStart/select", async (c) => {
   const weekStart = c.req.param("weekStart");
   const week = await db.getWeek(weekStart);
   if (!week) return c.json({ error: "week not found" }, 404);
+  const userEmail = getUserEmail(c.req.header("Authorization"));
   const body = await c.req.json<{ selections: WeekSelection[]; daysPerWeek?: number }>();
+  const confirmedBy = [...new Set([...(week.confirmedBy ?? []), ...(userEmail ? [userEmail] : [])])];
   const updated = {
     ...week,
     selections: body.selections,
     daysPerWeek: body.daysPerWeek ?? week.daysPerWeek,
     status: "shopping" as const,
+    confirmedBy,
+    updatedAt: new Date().toISOString(),
+  };
+  await db.saveWeek(updated);
+  return c.json({ week: updated });
+});
+
+app.post("/weeks/:weekStart/vote", async (c) => {
+  const weekStart = c.req.param("weekStart");
+  const userEmail = getUserEmail(c.req.header("Authorization"));
+  if (!userEmail) return c.json({ error: "cannot identify user" }, 401);
+  const week = await db.getWeek(weekStart);
+  if (!week) return c.json({ error: "week not found" }, 404);
+  const body = await c.req.json<{ recipeId: string; vote: "up" | "down" | null }>();
+  const votes = { ...(week.votes ?? {}) };
+  const userVotes = { ...(votes[userEmail] ?? {}) };
+  if (body.vote === null) {
+    delete userVotes[body.recipeId];
+  } else {
+    userVotes[body.recipeId] = body.vote;
+  }
+  if (Object.keys(userVotes).length === 0) {
+    delete votes[userEmail];
+  } else {
+    votes[userEmail] = userVotes;
+  }
+  const updated = { ...week, votes, updatedAt: new Date().toISOString() };
+  await db.saveWeek(updated);
+  return c.json({ week: updated });
+});
+
+app.post("/weeks/:weekStart/revert", async (c) => {
+  const weekStart = c.req.param("weekStart");
+  const week = await db.getWeek(weekStart);
+  if (!week) return c.json({ error: "week not found" }, 404);
+  if (week.status !== "shopping" && week.status !== "cooking") {
+    return c.json({ error: "can only revert shopping or cooking weeks" }, 400);
+  }
+  const updated = {
+    ...week,
+    status: "selecting" as const,
+    confirmedBy: [],
     updatedAt: new Date().toISOString(),
   };
   await db.saveWeek(updated);

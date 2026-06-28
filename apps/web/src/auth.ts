@@ -40,6 +40,19 @@ export async function signIn(email: string, password: string): Promise<void> {
   });
 }
 
+export function getCurrentUserEmail(): string | null {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
+    return (JSON.parse(json) as Record<string, unknown>)["email"] as string ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function signOut(): void {
   userPool.getCurrentUser()?.signOut();
   localStorage.removeItem(TOKEN_KEY);
