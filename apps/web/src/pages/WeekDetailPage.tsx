@@ -206,7 +206,7 @@ export default function WeekDetailPage() {
               lineHeight: 1.5,
             }}
           >
-            <strong>Missing {missingTypes.join(" & ")} options.</strong> This week was generated before the latest update.{" "}
+            <strong>Missing {missingTypes.join(" & ")} options.</strong>{" "}
             <button
               onClick={back}
               style={{
@@ -220,9 +220,8 @@ export default function WeekDetailPage() {
                 padding: 0,
               }}
             >
-              Go back and use ↺ to regenerate
-            </button>{" "}
-            with breakfast, lunch, and dinner.
+              Go back and use ↺ to regenerate.
+            </button>
           </div>
         )}
 
@@ -253,6 +252,7 @@ export default function WeekDetailPage() {
                       myEmail={myEmail}
                       onQuantityChange={(delta) => setQty(r.id, qty + delta)}
                       onVote={handleVote}
+                      onDetail={() => navigate(`/recipes/${r.id}`, { state: { weekStart } })}
                     />
                   );
                 })}
@@ -468,6 +468,7 @@ function RecipeCard({
   myEmail,
   onQuantityChange,
   onVote,
+  onDetail,
 }: {
   recipe: Recipe;
   quantity?: number;
@@ -476,6 +477,7 @@ function RecipeCard({
   myEmail?: string | null;
   onQuantityChange?: (delta: number) => void;
   onVote?: (recipeId: string, vote: "up" | "down" | null) => void;
+  onDetail?: () => void;
 }) {
   const totalMin = recipe.prepMinutes + recipe.cookMinutes;
   const isSelected = (quantity ?? 0) > 0;
@@ -545,7 +547,7 @@ function RecipeCard({
       </div>
 
       {onVote && (
-        <div style={{ display: "flex", gap: 8 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", gap: 8, marginBottom: onDetail ? 8 : 0 }} onClick={(e) => e.stopPropagation()}>
           {(["up", "down"] as const).map((v) => {
             const count = v === "up" ? upCount : downCount;
             const isMe = myVote === v;
@@ -573,6 +575,26 @@ function RecipeCard({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {onDetail && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={onDetail}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              fontSize: "0.75rem",
+              color: "var(--garden)",
+              fontWeight: 600,
+              letterSpacing: "0.01em",
+            }}
+          >
+            View recipe →
+          </button>
         </div>
       )}
     </div>

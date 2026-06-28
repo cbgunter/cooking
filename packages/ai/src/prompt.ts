@@ -112,11 +112,11 @@ function getRating(recipeId: string, ratings: Rating[]): number {
   return r?.stars ?? 0;
 }
 
-/** Build 2× candidate targets per requested meal type. */
+/** Build candidate targets: breakfast/lunch always get 4 options when enabled; dinner gets 2×. */
 export function buildTargetCounts(mealCounts: MealCounts): MealCounts {
   return {
-    breakfast: mealCounts.breakfast * 2,
-    lunch: mealCounts.lunch * 2,
+    breakfast: mealCounts.breakfast > 0 ? 4 : 0,
+    lunch: mealCounts.lunch > 0 ? 4 : 0,
     dinner: mealCounts.dinner * 2,
   };
 }

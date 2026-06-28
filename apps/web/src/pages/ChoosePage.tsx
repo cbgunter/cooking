@@ -369,7 +369,13 @@ function WeekCard({
             <p style={{ fontSize: "0.82rem", color: "var(--stone)", marginBottom: 14 }}>
               {isRegenerate ? "Adjust counts and regenerate:" : "How many meals per type?"}
             </p>
-            {(["breakfast", "lunch", "dinner"] as const).map((type) => (
+            {(["breakfast", "lunch", "dinner"] as const).map((type) => {
+              const maxVal = type === "dinner" ? 7 : 2;
+              const hint =
+                type === "breakfast" || type === "lunch"
+                  ? "4 options generated · pick 1–2"
+                  : `${counts[type] * 2} options generated`;
+              return (
               <div
                 key={type}
                 style={{
@@ -386,7 +392,7 @@ function WeekCard({
                     {type}
                   </div>
                   <div style={{ fontSize: "0.72rem", color: "var(--stone)", marginTop: 1 }}>
-                    {type === "breakfast" ? "Mornings" : type === "lunch" ? "Midday" : "Evenings"}
+                    {hint}
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -402,14 +408,15 @@ function WeekCard({
                   </span>
                   <button
                     onClick={() => stepperChange(type, +1)}
-                    disabled={counts[type] === 7}
-                    style={stepperBtnStyle(counts[type] === 7)}
+                    disabled={counts[type] === maxVal}
+                    style={stepperBtnStyle(counts[type] === maxVal)}
                   >
                     +
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
               <button
