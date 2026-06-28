@@ -36,19 +36,19 @@ function formatWeekDate(weekStart: string): string {
 }
 
 const MEAL_COLORS: Record<string, string> = {
-  breakfast: "#FEF9C3",
-  lunch: "#DCFCE7",
-  dinner: "#FFEDD5",
+  breakfast: "#F5E8DE",  // Apricot tint
+  lunch: "#EFE9DC",      // Cream
+  dinner: "#DCE8D4",     // Sprout tint
 };
 
 const STATUS_BADGE: Record<string, { bg: string; color: string; label: string }> = {
-  pending:   { bg: "#F3F4F6", color: "#6B7280", label: "Generating…" },
-  selecting: { bg: "#FEF3C7", color: "#92400E", label: "Choose meals" },
-  shopping:  { bg: "#DBEAFE", color: "#1E40AF", label: "Ready to shop" },
-  cooking:   { bg: "#D1FAE5", color: "#065F46", label: "Cooking" },
-  done:      { bg: "#D1FAE5", color: "#065F46", label: "Complete" },
-  skipped:   { bg: "#F3F4F6", color: "#6B7280", label: "Skipped" },
-  error:     { bg: "#FEE2E2", color: "#991B1B", label: "Failed" },
+  pending:   { bg: "#EFE9DC", color: "#7C766A", label: "Generating…" },
+  selecting: { bg: "#F5E8DE", color: "#A8623C", label: "Choose meals" },
+  shopping:  { bg: "#DCE8D4", color: "#42532F", label: "Ready to shop" },
+  cooking:   { bg: "#DCE8D4", color: "#566A46", label: "Cooking" },
+  done:      { bg: "#DCE8D4", color: "#566A46", label: "Complete" },
+  skipped:   { bg: "#EFE9DC", color: "#7C766A", label: "Skipped" },
+  error:     { bg: "#F5DEDA", color: "#7A2E22", label: "Failed" },
 };
 
 interface WeekEntry {
@@ -253,7 +253,7 @@ function WeekCard({
                 >
                   {r.title}
                 </span>
-                <span style={{ fontSize: "0.6rem", color: "rgba(0,0,0,0.4)", textTransform: "capitalize" }}>
+                <span style={{ fontSize: "0.6rem", color: "#7C766A", textTransform: "capitalize" }}>
                   {r.mealType}
                 </span>
               </div>

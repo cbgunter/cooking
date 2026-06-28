@@ -2,9 +2,9 @@ import { NavLink } from "react-router-dom";
 import { signOut } from "../auth.js";
 
 const nav: { label: string; path: string; icon: string }[] = [
-  { label: "Week", path: "/week", icon: "📅" },
-  { label: "List", path: "/shopping", icon: "🛒" },
-  { label: "Settings", path: "/preferences", icon: "⚙️" },
+  { label: "Week", path: "/week", icon: "▦" },
+  { label: "List", path: "/shopping", icon: "≡" },
+  { label: "Settings", path: "/preferences", icon: "◎" },
 ];
 
 export default function NavBar({ onSignOut }: { onSignOut: () => void }) {
@@ -20,8 +20,8 @@ export default function NavBar({ onSignOut }: { onSignOut: () => void }) {
         bottom: 0,
         left: 0,
         right: 0,
-        background: "#fff",
-        borderTop: "1px solid var(--border)",
+        background: "var(--paper)",
+        borderTop: "1px solid var(--line)",
         display: "flex",
         justifyContent: "space-around",
         alignItems: "center",
@@ -45,7 +45,7 @@ export default function NavBar({ onSignOut }: { onSignOut: () => void }) {
             color: isActive ? "var(--clay)" : "var(--slate-light)",
           })}
         >
-          <span style={{ fontSize: "1.2rem" }}>{item.icon}</span>
+          <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>{item.icon}</span>
           {item.label}
         </NavLink>
       ))}
@@ -65,7 +65,7 @@ export default function NavBar({ onSignOut }: { onSignOut: () => void }) {
           border: "none",
         }}
       >
-        <span style={{ fontSize: "1.2rem" }}>👋</span>
+        <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>→</span>
         Sign out
       </button>
     </nav>

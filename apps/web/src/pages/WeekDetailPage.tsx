@@ -440,8 +440,8 @@ function RecipeCard({
           {(["up", "down"] as const).map((v) => {
             const count = v === "up" ? upCount : downCount;
             const isMe = myVote === v;
-            const activeColor = v === "up" ? "#059669" : "#DC2626";
-            const activeBg = v === "up" ? "#D1FAE5" : "#FEE2E2";
+            const activeColor = v === "up" ? "#566A46" : "#7A2E22";
+            const activeBg = v === "up" ? "#DCE8D4" : "#F5DEDA";
             return (
               <button
                 key={v}

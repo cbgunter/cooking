@@ -1,15 +1,35 @@
+/* ── Brand palette ───────────────────────────────────────────────────── */
 :root {
-  --ivory: #faf9f5;
-  --clay: #d97757;
-  --clay-dark: #c4663f;
-  --slate: #4a5568;
-  --slate-light: #718096;
-  --card: #ffffff;
-  --border: #e2e8f0;
-  --green: #48bb78;
-  --radius: 14px;
-  --shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+  /* Brand */
+  --garden:      #566A46;
+  --garden-deep: #42532F;
+  --apricot:     #C2774E;
+  --apricot-deep:#A8623C;
+  --sprout:      #8FA075;
+
+  /* Neutrals */
+  --ink:   #23261E;
+  --stone: #7C766A;
+  --oat:   #F6F3EC;
+  --cream: #EFE9DC;
+  --paper: #FCFBF8;
+  --line:  #E4DECF;
+
+  /* Semantic aliases (used throughout components) */
+  --clay:       var(--garden);
+  --clay-dark:  var(--garden-deep);
+  --ivory:      var(--oat);
+  --slate:      var(--ink);
+  --slate-light: var(--stone);
+  --card:       var(--paper);
+  --border:     var(--line);
+  --green:      var(--garden);
+
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(35, 38, 30, 0.08), 0 0 0 1px rgba(35, 38, 30, 0.04);
 }
+
+/* ── Reset ───────────────────────────────────────────────────────────── */
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -17,12 +37,16 @@
   padding: 0;
 }
 
+/* ── Base ────────────────────────────────────────────────────────────── */
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  background: var(--ivory);
-  color: var(--slate);
+  font-family: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--oat);
+  color: var(--ink);
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
+  font-size: 16px;
+  line-height: 1.6;
 }
 
 #root {
@@ -31,7 +55,7 @@ body {
   min-height: 100dvh;
   max-width: 520px;
   margin: 0 auto;
-  padding-bottom: 72px; /* room for bottom nav */
+  padding-bottom: 72px;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -44,71 +68,124 @@ button {
   color: inherit;
 }
 
-h1 { font-size: 1.5rem; font-weight: 700; }
-h2 { font-size: 1.2rem; font-weight: 600; }
-h3 { font-size: 1rem; font-weight: 600; }
+/* ── Typography ──────────────────────────────────────────────────────── */
 
-/* ── Utility classes ─────────────────────────────────────────────────── */
+h1 {
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+h2 {
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+/* Recipe/dish names: italic serif — the editorial signature */
+h3 {
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 1rem;
+  font-weight: 400;
+  font-style: italic;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 12px 20px;
-  border-radius: 10px;
+  padding: 12px 22px;
+  border-radius: 999px;
   font-size: 0.95rem;
   font-weight: 600;
-  transition: opacity 0.15s, background 0.15s;
+  font-family: "Hanken Grotesk", system-ui, sans-serif;
+  transition: background 0.15s, opacity 0.15s, border-color 0.15s;
+  letter-spacing: 0.01em;
 }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.btn-primary { background: var(--clay); color: #fff; }
-.btn-primary:hover:not(:disabled) { background: var(--clay-dark); }
+/* Primary — Garden fill, Paper text */
+.btn-primary {
+  background: var(--garden);
+  color: var(--paper);
+}
+.btn-primary:hover:not(:disabled) { background: var(--garden-deep); }
 
+/* Secondary — transparent with Ink hairline */
 .btn-outline {
-  border: 1.5px solid var(--border);
-  background: var(--card);
-  color: var(--slate);
+  border: 1.5px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
 }
-.btn-outline:hover:not(:disabled) { border-color: var(--clay); color: var(--clay); }
+.btn-outline:hover:not(:disabled) { background: var(--cream); }
 
-.btn-ghost { color: var(--slate-light); }
-.btn-ghost:hover { color: var(--slate); }
+/* Ghost — text only */
+.btn-ghost { color: var(--stone); }
+.btn-ghost:hover { color: var(--ink); }
+
+/* ── Cards ───────────────────────────────────────────────────────────── */
 
 .card {
-  background: var(--card);
+  background: var(--paper);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px;
 }
 
+/* ── Tags & badges ───────────────────────────────────────────────────── */
+
 .tag {
   display: inline-block;
-  background: var(--ivory);
-  border: 1px solid var(--border);
-  border-radius: 20px;
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 999px;
   padding: 3px 10px;
   font-size: 0.75rem;
-  color: var(--slate-light);
+  font-weight: 600;
+  color: var(--stone);
+  font-family: "Hanken Grotesk", system-ui, sans-serif;
+  letter-spacing: 0.01em;
 }
 
+/* Meal-type tag — Apricot tint */
 .badge-clay {
-  background: #fef0eb;
-  color: var(--clay);
-  border-color: #f9d5c6;
+  background: #F5E8DE;
+  color: var(--apricot-deep);
+  border-color: #E8CEBC;
 }
+
+/* Dietary/vegetarian tag — Sprout tint */
+.badge-sprout {
+  background: #E4ECD9;
+  color: #3E5430;
+  border-color: #C8D9B8;
+}
+
+/* ── Layout utilities ────────────────────────────────────────────────── */
 
 .stack { display: flex; flex-direction: column; }
-.row { display: flex; align-items: center; }
+.row   { display: flex; align-items: center; }
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
-.p-4 { padding: 16px; }
+.p-4   { padding: 16px; }
 .pb-safe { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 
-.text-sm { font-size: 0.875rem; }
-.text-xs { font-size: 0.75rem; }
-.text-muted { color: var(--slate-light); }
-.text-clay { color: var(--clay); }
-.fw-medium { font-weight: 500; }
+/* ── Text utilities ──────────────────────────────────────────────────── */
+
+.text-sm   { font-size: 0.875rem; }
+.text-xs   { font-size: 0.75rem; }
+.text-muted { color: var(--stone); }
+.text-clay  { color: var(--garden); }
+.fw-medium  { font-weight: 500; }
