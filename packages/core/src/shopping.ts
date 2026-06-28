@@ -1,5 +1,36 @@
 import type { Recipe, ShoppingList, ShoppingListItem, WeekSelection } from "./types.js";
 
+const UNIT_ALIASES: Record<string, string> = {
+  tablespoon: "tbsp", tablespoons: "tbsp", tbsps: "tbsp", "tbs": "tbsp",
+  teaspoon: "tsp", teaspoons: "tsp", tsps: "tsp",
+  cup: "cup", cups: "cup",
+  ounce: "oz", ounces: "oz",
+  pound: "lb", pounds: "lb", lbs: "lb",
+  gram: "g", grams: "g",
+  kilogram: "kg", kilograms: "kg",
+  milliliter: "ml", milliliters: "ml", millilitre: "ml", millilitres: "ml",
+  liter: "L", liters: "L", litre: "L", litres: "L",
+  clove: "clove", cloves: "clove",
+  slice: "slice", slices: "slice",
+  can: "can", cans: "can",
+  piece: "piece", pieces: "piece",
+  sprig: "sprig", sprigs: "sprig",
+  stalk: "stalk", stalks: "stalk",
+  head: "head", heads: "head",
+  bunch: "bunch", bunches: "bunch",
+  pinch: "pinch", pinches: "pinch",
+  whole: "whole",
+};
+
+function normalizeUnit(raw: string): string {
+  const lower = raw.trim().toLowerCase();
+  return UNIT_ALIASES[lower] ?? lower;
+}
+
+function normalizeIngredientName(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export function buildShoppingList(
   weekId: string,
   recipes: Recipe[],
@@ -14,7 +45,9 @@ export function buildShoppingList(
     const scale = (peopleCount / recipe.servings) * mealQty;
 
     for (const ing of recipe.ingredients) {
-      const key = `${ing.name.toLowerCase()}::${ing.unit.toLowerCase()}`;
+      const normName = normalizeIngredientName(ing.name);
+      const normUnit = normalizeUnit(ing.unit);
+      const key = `${normName}::${normUnit}`;
       const existing = itemMap.get(key);
 
       if (existing) {
@@ -26,7 +59,7 @@ export function buildShoppingList(
         itemMap.set(key, {
           name: ing.name,
           totalQuantity: ing.quantity * scale,
-          unit: ing.unit,
+          unit: normUnit,
           category: ing.category,
           recipeIds: [recipe.id],
         });

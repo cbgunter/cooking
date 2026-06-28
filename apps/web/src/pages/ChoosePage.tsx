@@ -127,7 +127,7 @@ export default function ChoosePage() {
   return (
     <div style={{ flex: 1, overflowY: "auto" }}>
       {/* Page header */}
-      <div style={{ padding: "32px 20px 24px" }}>
+      <div style={{ padding: "32px 20px 24px", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
         <p
           style={{
             fontSize: "0.72rem",
@@ -153,7 +153,7 @@ export default function ChoosePage() {
           <Spinner />
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "0 0 40px" }}>
+        <div className="week-card-list">
           {entries.map((entry, idx) => (
             <WeekCard
               key={entry.weekStart}

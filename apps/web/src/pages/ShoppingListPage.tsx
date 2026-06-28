@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import type { ShoppingList, IngredientCategory } from "@cooking/core";
 import * as api from "../api.js";
 
@@ -27,15 +27,32 @@ const CATEGORY_LABELS: Record<IngredientCategory, string> = {
   other: "Other",
 };
 
+function roundQty(n: number): string {
+  if (Number.isInteger(n)) return String(n);
+  return n < 0.1 ? n.toFixed(2) : n < 10 ? n.toFixed(1) : String(Math.round(n));
+}
+
+function checkedKey(weekId: string | null) {
+  return `shopping-checked::${weekId ?? "current"}`;
+}
+
 export default function ShoppingListPage() {
   const [searchParams] = useSearchParams();
   const weekParam = searchParams.get("week");
+  const navigate = useNavigate();
   const [list, setList] = useState<ShoppingList | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const key = checkedKey(weekParam);
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) setChecked(new Set(JSON.parse(saved) as string[]));
+    } catch {
+      // ignore corrupt storage
+    }
     const fetch = weekParam
       ? api.getShoppingListForWeek(weekParam)
       : api.getShoppingList();
@@ -50,6 +67,11 @@ export default function ShoppingListPage() {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
       else next.add(name);
+      try {
+        localStorage.setItem(checkedKey(weekParam), JSON.stringify([...next]));
+      } catch {
+        // ignore storage errors
+      }
       return next;
     });
   };
@@ -84,7 +106,13 @@ export default function ShoppingListPage() {
         </p>
       </div>
 
-      <div className="stack">
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+          alignItems: "start",
+        }}
+      >
         {grouped.map(({ category, label, items }) => (
           <section key={category} style={{ marginBottom: 8 }}>
             <h2
@@ -145,7 +173,7 @@ export default function ShoppingListPage() {
                     </span>
                   </div>
                   <span className="text-sm text-muted">
-                    {item.totalQuantity} {item.unit}
+                    {roundQty(item.totalQuantity)} {item.unit}
                   </span>
                 </div>
               );
@@ -158,7 +186,10 @@ export default function ShoppingListPage() {
         <div style={{ padding: "12px 16px" }}>
           <button
             className="btn btn-ghost text-sm"
-            onClick={() => setChecked(new Set())}
+            onClick={() => {
+              setChecked(new Set());
+              try { localStorage.removeItem(checkedKey(weekParam)); } catch { /* ignore */ }
+            }}
           >
             Clear all checks
           </button>
@@ -169,12 +200,41 @@ export default function ShoppingListPage() {
 }
 
 function PageShell({ title, children }: { title: string; children: React.ReactNode }) {
+  const navigate = useNavigate();
   return (
     <div className="stack" style={{ flex: 1 }}>
-      <div style={{ padding: "24px 16px 16px", borderBottom: "1px solid var(--border)" }}>
-        <h1>{title}</h1>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "16px 20px 14px",
+          borderBottom: "1px solid var(--border)",
+          maxWidth: 1100,
+          width: "100%",
+          margin: "0 auto",
+          boxSizing: "border-box",
+        }}
+      >
+        <button
+          onClick={() => navigate(-1)}
+          style={{
+            background: "none",
+            border: "none",
+            fontSize: "1.2rem",
+            cursor: "pointer",
+            padding: "0 4px",
+            color: "var(--stone)",
+            lineHeight: 1,
+          }}
+        >
+          ←
+        </button>
+        <h1 style={{ margin: 0, fontSize: "1.1rem" }}>{title}</h1>
       </div>
-      <div style={{ flex: 1 }}>{children}</div>
+      <div style={{ flex: 1, maxWidth: 1100, width: "100%", margin: "0 auto", boxSizing: "border-box" }}>
+        {children}
+      </div>
     </div>
   );
 }

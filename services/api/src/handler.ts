@@ -180,10 +180,14 @@ app.post("/weeks/:weekStart/select", async (c) => {
   if (!week) return c.json({ error: "week not found" }, 404);
   const userEmail = getUserEmail(c.req.header("Authorization"));
   const body = await c.req.json<{ selections: WeekSelection[]; daysPerWeek?: number }>();
+  const activeSelections = body.selections.filter((s) => (s.quantity ?? 1) > 0);
+  if (activeSelections.length === 0) {
+    return c.json({ error: "at least one meal must be selected" }, 400);
+  }
   const confirmedBy = [...new Set([...(week.confirmedBy ?? []), ...(userEmail ? [userEmail] : [])])];
   const updated = {
     ...week,
-    selections: body.selections,
+    selections: activeSelections,
     daysPerWeek: body.daysPerWeek ?? week.daysPerWeek,
     status: "shopping" as const,
     confirmedBy,
@@ -227,6 +231,8 @@ app.post("/weeks/:weekStart/revert", async (c) => {
   const updated = {
     ...week,
     status: "selecting" as const,
+    selections: [],
+    cookedRecipeIds: [],
     confirmedBy: [],
     updatedAt: new Date().toISOString(),
   };

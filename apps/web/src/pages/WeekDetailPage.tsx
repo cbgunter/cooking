@@ -241,7 +241,7 @@ export default function WeekDetailPage() {
               >
                 {type}
               </h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="recipe-card-grid">
                 {recipes.map((r) => {
                   const qty = quantities.get(r.id) ?? 0;
                   return (
@@ -379,7 +379,7 @@ export default function WeekDetailPage() {
           <button
             className="btn btn-outline"
             style={{ width: "100%" }}
-            onClick={() => navigate(`/shop`)}
+            onClick={() => navigate(`/shopping?week=${weekStart}`)}
           >
             View shopping list
           </button>
@@ -426,9 +426,13 @@ function PageShell({
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "16px 16px 14px",
+          padding: "16px 20px 14px",
           borderBottom: "1px solid var(--line)",
           flexShrink: 0,
+          maxWidth: 1100,
+          width: "100%",
+          margin: "0 auto",
+          boxSizing: "border-box",
         }}
       >
         <button
@@ -447,7 +451,11 @@ function PageShell({
         </button>
         <h1 style={{ margin: 0, fontSize: "1.1rem" }}>{title}</h1>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 0" }}>{children}</div>
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 0" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+          {children}
+        </div>
+      </div>
     </div>
   );
 }

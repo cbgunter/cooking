@@ -51,118 +51,132 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
       {/* Top bar */}
       <header
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 20px",
-          height: 60,
           background: "var(--paper)",
           borderBottom: "1px solid var(--line)",
           flexShrink: 0,
-          position: "relative",
           zIndex: 10,
         }}
       >
-        {/* Sign out (left) */}
-        <button
-          onClick={handleSignOut}
+        <div
           style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "0.8rem",
-            color: "var(--stone)",
-            letterSpacing: "0.02em",
-            padding: "4px 0",
-            minWidth: 60,
-          }}
-        >
-          Sign out
-        </button>
-
-        {/* Wordmark (center) */}
-        <button
-          onClick={() => navigate("/choose")}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 0,
-            lineHeight: 0,
-            position: "absolute",
-            left: "50%",
-            transform: "translateX(-50%)",
-          }}
-        >
-          <img src="/logo.png" alt="Cooking" style={{ height: 36, display: "block" }} />
-        </button>
-
-        {/* Hamburger (right) */}
-        <button
-          onClick={() => setDrawerOpen(true)}
-          aria-label="Open menu"
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "6px 0",
             display: "flex",
-            flexDirection: "column",
-            gap: 5,
-            minWidth: 60,
-            alignItems: "flex-end",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 20px",
+            height: 60,
+            maxWidth: 1100,
+            margin: "0 auto",
+            position: "relative",
           }}
         >
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              style={{
-                display: "block",
-                width: i === 1 ? 16 : 22,
-                height: 2,
-                background: "var(--ink)",
-                borderRadius: 2,
-              }}
-            />
-          ))}
-        </button>
+          {/* Sign out (left) */}
+          <button
+            onClick={handleSignOut}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "0.8rem",
+              color: "var(--stone)",
+              letterSpacing: "0.02em",
+              padding: "4px 0",
+              minWidth: 60,
+            }}
+          >
+            Sign out
+          </button>
+
+          {/* Wordmark (center) */}
+          <button
+            onClick={() => navigate("/choose")}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              lineHeight: 0,
+              position: "absolute",
+              left: "50%",
+              transform: "translateX(-50%)",
+            }}
+          >
+            <img src="/logo.png" alt="Cooking" style={{ height: 36, display: "block" }} />
+          </button>
+
+          {/* Hamburger (right) */}
+          <button
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open menu"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "6px 0",
+              display: "flex",
+              flexDirection: "column",
+              gap: 5,
+              minWidth: 60,
+              alignItems: "flex-end",
+            }}
+          >
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                style={{
+                  display: "block",
+                  width: i === 1 ? 16 : 22,
+                  height: 2,
+                  background: "var(--ink)",
+                  borderRadius: 2,
+                }}
+              />
+            ))}
+          </button>
+        </div>
       </header>
 
       {/* Section tab strip (when inside a named section) */}
       {activeSection && (
         <div
           style={{
-            display: "flex",
-            gap: 0,
-            padding: "0 20px",
             background: "var(--paper)",
             borderBottom: "1px solid var(--line)",
             flexShrink: 0,
           }}
         >
-          {NAV_LINKS.slice(0, 3).map(({ label, path }) => {
-            const active = location.pathname === path || location.pathname.startsWith(path + "/");
-            return (
-              <button
-                key={path}
-                onClick={() => navigate(path)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "10px 16px 9px",
-                  fontSize: "0.82rem",
-                  fontWeight: active ? 600 : 400,
-                  color: active ? "var(--garden)" : "var(--stone)",
-                  borderBottom: `2px solid ${active ? "var(--garden)" : "transparent"}`,
-                  letterSpacing: "0.01em",
-                  transition: "color 0.15s, border-color 0.15s",
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
+          <div
+            style={{
+              display: "flex",
+              gap: 0,
+              padding: "0 20px",
+              maxWidth: 1100,
+              margin: "0 auto",
+            }}
+          >
+            {NAV_LINKS.slice(0, 3).map(({ label, path }) => {
+              const active = location.pathname === path || location.pathname.startsWith(path + "/");
+              return (
+                <button
+                  key={path}
+                  onClick={() => navigate(path)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "10px 16px 9px",
+                    fontSize: "0.82rem",
+                    fontWeight: active ? 600 : 400,
+                    color: active ? "var(--garden)" : "var(--stone)",
+                    borderBottom: `2px solid ${active ? "var(--garden)" : "transparent"}`,
+                    letterSpacing: "0.01em",
+                    transition: "color 0.15s, border-color 0.15s",
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
