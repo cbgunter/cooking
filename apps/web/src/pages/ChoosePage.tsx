@@ -12,14 +12,16 @@ function toLocalISO(d: Date): string {
   ].join("-");
 }
 
-function getNextFiveMondays(): string[] {
+const WEEKS_SHOWN = 6;
+
+function getUpcomingMondays(): string[] {
   const today = new Date();
   const day = today.getDay();
   const daysToNextMon = day === 0 ? 1 : 8 - day;
   const base = new Date(today);
   base.setDate(today.getDate() + daysToNextMon);
   base.setHours(0, 0, 0, 0);
-  return Array.from({ length: 5 }, (_, i) => {
+  return Array.from({ length: WEEKS_SHOWN }, (_, i) => {
     const d = new Date(base);
     d.setDate(base.getDate() + i * 7);
     return toLocalISO(d);
@@ -59,7 +61,7 @@ interface WeekEntry {
   selectedRecipes: Recipe[];
 }
 
-const MONDAYS = getNextFiveMondays();
+const MONDAYS = getUpcomingMondays();
 
 export default function ChoosePage() {
   const [entries, setEntries] = useState<WeekEntry[]>(
