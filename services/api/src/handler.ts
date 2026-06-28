@@ -108,7 +108,7 @@ app.get("/weeks/current", async (c) => {
 });
 
 app.post("/weeks/current/generate", async (c) => {
-  const body = await c.req.json<{ daysPerWeek?: number }>().catch(() => ({}));
+  const body = await c.req.json<{ daysPerWeek?: number }>().catch(() => ({} as { daysPerWeek?: number }));
   const week = await generateWeek(upcomingMondayISO(), body.daysPerWeek);
   return c.json({ week }, 202);
 });
@@ -166,7 +166,7 @@ app.get("/weeks/:weekStart", async (c) => {
 });
 
 app.post("/weeks/:weekStart/generate", async (c) => {
-  const body = await c.req.json<{ daysPerWeek?: number }>().catch(() => ({}));
+  const body = await c.req.json<{ daysPerWeek?: number }>().catch(() => ({} as { daysPerWeek?: number }));
   const week = await generateWeek(c.req.param("weekStart"), body.daysPerWeek);
   return c.json({ week }, 202);
 });
