@@ -83,7 +83,7 @@ ${distributionLines}
 ## Hard constraints (NEVER violate these)
 - Max calories per serving: ${prefs.nutrition.maxCaloriesPerMeal} kcal
 - Max sodium per serving: ${prefs.nutrition.maxSodiumMgPerMeal} mg
-- Total prep + cook time: ${prefs.prepTimeRange.minMinutes}–${prefs.prepTimeRange.maxMinutes} minutes
+- Total prep + cook time: up to ${prefs.prepTimeRange.maxMinutes} minutes (breakfast and lunch have no minimum; dinner minimum is ${prefs.prepTimeRange.minMinutes} min)
 - Cost per serving: breakfast ≤$${prefs.costCaps.breakfast}, lunch ≤$${prefs.costCaps.lunch}, dinner ≤$${prefs.costCaps.dinner}
 - Avoid (ingredients/cuisines): ${ingredientDislikes}
 

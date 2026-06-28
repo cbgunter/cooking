@@ -358,7 +358,7 @@ function WeekCard({
             {isSkipped
               ? "You skipped this week."
               : isError
-              ? "Generation failed. Try again?"
+              ? (week?.errorMessage ?? "Generation failed. Try again?")
               : "No meals planned yet."}
           </p>
         )}

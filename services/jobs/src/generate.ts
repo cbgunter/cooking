@@ -31,11 +31,28 @@ export const handler: Handler<GenerateEvent> = async (event) => {
     console.error(JSON.stringify({ weekStart, error: String(err) }));
     const failed = await db.getWeek(weekStart);
     if (failed) {
-      await db.saveWeek({ ...failed, status: "error", updatedAt: new Date().toISOString() });
+      const errorMessage = isAnthropicError(err)
+        ? "Claude API is unavailable — tap to try again"
+        : "Generation failed unexpectedly — tap to try again";
+      await db.saveWeek({ ...failed, status: "error", errorMessage, updatedAt: new Date().toISOString() });
     }
     throw err;
   }
 };
+
+function isAnthropicError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  // Anthropic SDK errors include the status code or known phrases
+  return (
+    err.constructor.name === "APIError" ||
+    msg.includes("overloaded") ||
+    msg.includes("rate limit") ||
+    msg.includes("529") ||
+    msg.includes("503") ||
+    msg.includes("anthropic")
+  );
+}
 
 async function run(weekStart: string, eventMealCounts?: MealCounts) {
   const apiKey = await getAnthropicKey();
@@ -74,7 +91,16 @@ async function run(weekStart: string, eventMealCounts?: MealCounts) {
   );
 
   if (recipes.length === 0) {
-    console.warn("No valid recipe candidates generated — week stays in pending status");
+    console.warn(JSON.stringify({ weekStart, warning: "No valid recipe candidates generated" }));
+    const noResults = await db.getWeek(weekStart);
+    if (noResults) {
+      await db.saveWeek({
+        ...noResults,
+        status: "error",
+        errorMessage: "No recipes matched your constraints — tap to try again or adjust preferences",
+        updatedAt: new Date().toISOString(),
+      });
+    }
     return;
   }
 

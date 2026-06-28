@@ -46,6 +46,24 @@ describe("validateRecipeConstraints", () => {
     expect(v.some((x) => x.field === "costPerServing")).toBe(true);
   });
 
+  it("catches under-minimum prep time for non-breakfast meals", () => {
+    const r = { ...baseRecipe, mealType: "dinner" as const, prepMinutes: 5, cookMinutes: 5 };
+    const v = validateRecipeConstraints(r, prefs);
+    expect(v.some((x) => x.field === "prepTime")).toBe(true);
+  });
+
+  it("exempts quick breakfasts from the minimum prep-time floor", () => {
+    const r = { ...baseRecipe, mealType: "breakfast" as const, prepMinutes: 3, cookMinutes: 5 };
+    const v = validateRecipeConstraints(r, prefs);
+    expect(v.some((x) => x.field === "prepTime")).toBe(false);
+  });
+
+  it("exempts quick lunches from the minimum prep-time floor", () => {
+    const r = { ...baseRecipe, mealType: "lunch" as const, prepMinutes: 3, cookMinutes: 5 };
+    const v = validateRecipeConstraints(r, prefs);
+    expect(v.some((x) => x.field === "prepTime")).toBe(false);
+  });
+
   it("catches disliked ingredients", () => {
     const p = { ...prefs, dislikes: ["mushroom"] };
     const r = {

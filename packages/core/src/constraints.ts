@@ -34,7 +34,8 @@ export function validateRecipeConstraints(
     });
   }
 
-  if (totalMinutes < prefs.prepTimeRange.minMinutes) {
+  // Breakfast and lunch are exempt from the minimum-time floor; quick prep is a feature.
+  if (recipe.mealType === "dinner" && totalMinutes < prefs.prepTimeRange.minMinutes) {
     violations.push({
       field: "prepTime",
       message: `${totalMinutes} min is under minimum ${prefs.prepTimeRange.minMinutes} min`,

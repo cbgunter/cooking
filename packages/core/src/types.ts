@@ -99,6 +99,8 @@ export interface Week {
   votes?: { [userEmail: string]: { [recipeId: string]: "up" | "down" } };
   /** Emails of users who have confirmed the final meal selections */
   confirmedBy?: string[];
+  /** Human-readable reason set when status is "error" */
+  errorMessage?: string;
   /** ISO datetime */
   createdAt: string;
   updatedAt: string;

@@ -69,7 +69,7 @@ All scans filter on SK prefix patterns — there are no GSIs.
 ```
 pending → selecting → shopping → cooking → done
                                          ↘ skipped
-                                         ↘ error
+        ↘ error
 ```
 
 - `pending`: Generate Lambda running
@@ -77,6 +77,7 @@ pending → selecting → shopping → cooking → done
 - `shopping`: meals confirmed, shopping list available
 - `cooking`: at least one recipe marked cooked
 - `done`: all selected recipes cooked
+- `error`: generation failed (Anthropic API error or all candidates filtered out); `Week.errorMessage` carries a human-readable reason shown in the UI
 
 ## Tab → Code Map
 
@@ -93,6 +94,10 @@ pending → selecting → shopping → cooking → done
 `ChoosePage` → `POST /weeks/:weekStart/generate` → API Lambda → async invokes Generate Lambda → `packages/ai/src/generator.ts` calls Claude with `add_recipe` tool → recipes saved to DynamoDB → week status set to `selecting`.
 
 Candidate counts: breakfast and lunch always generate **4 candidates** regardless of day count (user picks 1–2). Dinner generates **2× the requested night count**. Logic lives in `packages/ai/src/prompt.ts` → `buildTargetCounts`.
+
+Each meal type is generated in its own parallel Claude request so a truncation or API error on one type doesn't lose the others. If a type returns zero accepted candidates after retries, the week moves to `error` status.
+
+**Constraint filtering** (`packages/core/src/constraints.ts`): breakfast and lunch are exempt from the minimum prep-time floor — only dinner enforces it. All other constraints (calories, sodium, cost, max time, dislikes) apply to all meal types.
 
 ## User Identity
 
