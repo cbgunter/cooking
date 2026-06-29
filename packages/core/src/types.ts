@@ -152,6 +152,21 @@ export interface HouseholdPreferences {
   notificationEmail: string;
 }
 
+export interface RecipeDownvoteEntry {
+  userEmail: string;
+  weekStart: string;
+  timestamp: string;
+}
+
+export interface RecipeDownvote {
+  /** Normalized (lowercase, trimmed) recipe title — used as the lookup key */
+  title: string;
+  /** Original title as shown in the UI */
+  displayTitle: string;
+  downvotes: RecipeDownvoteEntry[];
+  updatedAt: string;
+}
+
 export interface ShoppingListItem {
   name: string;
   totalQuantity: number;

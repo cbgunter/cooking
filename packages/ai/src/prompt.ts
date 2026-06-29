@@ -4,7 +4,7 @@ export interface GenerationContext {
   prefs: HouseholdPreferences;
   recentRecipes: Recipe[];
   highlyRatedRecipes: Recipe[];
-  dislikedRecipes: Array<{ title: string; notes?: string }>;
+  dislikedRecipes: Array<{ title: string; notes?: string; permanent?: boolean }>;
   ratings: Rating[];
   /** Per-type candidate targets (already 2× user days) */
   targetCounts: MealCounts;
@@ -30,10 +30,18 @@ export function buildMenuGenerationPrompt(ctx: GenerationContext): string {
           .join("\n")
       : "None yet";
 
+  const permanentlyBanned = dislikedRecipes.filter((r) => r.permanent);
+  const temporarilyDisliked = dislikedRecipes.filter((r) => !r.permanent);
+
+  const bannedText =
+    permanentlyBanned.length > 0
+      ? permanentlyBanned.map((r) => `- ${r.title}`).join("\n")
+      : "None";
+
   const dislikedText =
-    dislikedRecipes.length > 0
-      ? dislikedRecipes
-          .map((r) => `- ${r.title}${r.notes ? ` (feedback: "${r.notes}")` : ""}`)
+    temporarilyDisliked.length > 0
+      ? temporarilyDisliked
+          .map((r) => `- ${r.title}${r.notes ? ` (${r.notes})` : ""}`)
           .join("\n")
       : "None";
 
@@ -97,7 +105,10 @@ ${recentTitles}
 ## Household favorites
 ${favoriteTitles}
 
-## Previously disliked / "pass next time" (avoid these)
+## NEVER recommend these again (both users rejected them)
+${bannedText}
+
+## Avoid for now (recently thumbed down or rated poorly)
 ${dislikedText}
 ${existing}
 ## Ingredient reuse

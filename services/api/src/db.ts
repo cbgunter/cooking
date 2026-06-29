@@ -6,7 +6,7 @@ import {
   BatchWriteCommand,
   ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
-import type { HouseholdPreferences, Recipe, Week, Rating } from "@cooking/core";
+import type { HouseholdPreferences, Recipe, Week, Rating, RecipeDownvote } from "@cooking/core";
 
 const TABLE_NAME = process.env["TABLE_NAME"] ?? "";
 
@@ -200,6 +200,33 @@ export async function getAllRatings(): Promise<Rating[]> {
   );
   return ((result.Items ?? []) as Record<string, unknown>[]).map(
     ({ PK: _pk, SK: _sk, ...rest }) => rest as unknown as Rating
+  );
+}
+
+// ── Recipe downvotes ──────────────────────────────────────────────────────────
+
+export function normalizeTitle(title: string): string {
+  return title.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+export async function getRecipeDownvote(normalizedTitle: string): Promise<RecipeDownvote | null> {
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: "HOUSEHOLD", SK: `DOWNVOTE#${normalizedTitle}` },
+    })
+  );
+  if (!result.Item) return null;
+  const { PK: _pk, SK: _sk, ...rest } = result.Item as Record<string, unknown>;
+  return rest as unknown as RecipeDownvote;
+}
+
+export async function saveRecipeDownvote(downvote: RecipeDownvote): Promise<void> {
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLE_NAME,
+      Item: { PK: "HOUSEHOLD", SK: `DOWNVOTE#${downvote.title}`, ...downvote },
+    })
   );
 }
 

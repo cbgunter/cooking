@@ -204,6 +204,8 @@ app.post("/weeks/:weekStart/vote", async (c) => {
   const week = await db.getWeek(weekStart);
   if (!week) return c.json({ error: "week not found" }, 404);
   const body = await c.req.json<{ recipeId: string; vote: "up" | "down" | null }>();
+
+  // Update in-week votes (existing behaviour)
   const votes = { ...(week.votes ?? {}) };
   const userVotes = { ...(votes[userEmail] ?? {}) };
   if (body.vote === null) {
@@ -218,8 +220,44 @@ app.post("/weeks/:weekStart/vote", async (c) => {
   }
   const updated = { ...week, votes, updatedAt: new Date().toISOString() };
   await db.saveWeek(updated);
+
+  // Persist thumbs-down so future generation avoids the recipe title.
+  // Fire-and-forget after the week is saved — a failure here shouldn't
+  // block the UI response.
+  persistDownvote(body.recipeId, userEmail, weekStart, body.vote).catch((err) =>
+    console.error(JSON.stringify({ action: "persistDownvote", error: String(err) }))
+  );
+
   return c.json({ week: updated });
 });
+
+async function persistDownvote(
+  recipeId: string,
+  userEmail: string,
+  weekStart: string,
+  vote: "up" | "down" | null
+): Promise<void> {
+  const recipe = await db.getRecipe(recipeId);
+  if (!recipe) return;
+
+  const normalized = db.normalizeTitle(recipe.title);
+  const existing = await db.getRecipeDownvote(normalized) ?? {
+    title: normalized,
+    displayTitle: recipe.title,
+    downvotes: [],
+    updatedAt: new Date().toISOString(),
+  };
+
+  const now = new Date().toISOString();
+  let downvotes = existing.downvotes.filter(
+    (d) => !(d.userEmail === userEmail && d.weekStart === weekStart)
+  );
+  if (vote === "down") {
+    downvotes = [...downvotes, { userEmail, weekStart, timestamp: now }];
+  }
+
+  await db.saveRecipeDownvote({ ...existing, downvotes, updatedAt: now });
+}
 
 app.post("/weeks/:weekStart/revert", async (c) => {
   const weekStart = c.req.param("weekStart");

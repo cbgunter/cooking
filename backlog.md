@@ -1,5 +1,14 @@
 # Backlog
 
+## Use candidate votes to influence generation
+The 👍/👎 votes on the choosing page are stored on `Week.votes` per user but currently have no effect on AI generation. Options:
+- Pass down-voted candidate titles to the generator as "avoid these" (similar to dislikedRecipes)
+- Pass up-voted candidate titles as hints for style/cuisine direction
+- Use vote signals to break ties when both users want different meals
+
+## Nutrition preview on recipe cards
+Show calories and sodium inline on each candidate recipe card in the Choose view (`WeekDetailPage.tsx`) so users can compare meals at a glance without tapping into the detail page. Small secondary line under the recipe title — e.g. "480 kcal · 620mg sodium". Both values are already present on the `Recipe` type (`nutrition.calories`, `nutrition.sodiumMg`), so this is a frontend-only change.
+
 ## Per-feature CLAUDE.md files
 Move page files into feature subfolders and add a CLAUDE.md to each:
 - `apps/web/src/pages/choose/` — ChoosePage.tsx, WeekDetailPage.tsx, WeekPage.tsx
@@ -49,6 +58,23 @@ Fine at current scale (two users, hundreds of rows). These matter as data grows:
 - **`/eat` and `/weeks` fan out over all weeks** — `handler.ts` loops every week doing per-week recipe + rating fetches (N+1). Combine with `BatchGetItem` and cap/paginate to the last ~6 weeks.
 - **API Lambda timeout sits at 29s** (`api-stack.ts:102`), one second under the API Gateway hard limit, while `/eat` does unbounded per-week work. Bound the work (above) rather than just raising the timeout.
 - **Frontend polls every 5s** in ChoosePage / WeekDetailPage while a week is pending. Generation takes 10–30s. Back off (5s → 10s → 20s) to cut redundant `/weeks` (Scan-backed) calls.
+
+## Recipe API for nutrition/equipment filtering
+
+Evaluated four recipe APIs as a potential supplement to AI generation:
+
+| API | Recipes | Nutrition filters | Equipment filter | Free tier |
+|-----|---------|-------------------|-----------------|-----------|
+| **Spoonacular** | ~365K | ✓ min/max calories, sodium, macros | ✓ Yes (air fryer, instant pot, grill, sheet pan, etc.) | 150 req/day |
+| **Edamam** | ~2.3M | ✓ 28+ nutrients, 80+ health labels | ✗ No | 1,000 req/day |
+| Tasty (RapidAPI) | ~50K | Limited | ✗ No | Retired |
+| TheMealDB | ~300 | ✗ None | ✗ No | Free/unlimited |
+
+**Recommendation: Spoonacular** — only API that supports equipment/appliance filtering, which maps directly to the `equipment` field on `Recipe`. Nutrition range filters (min/max calories, sodium per serving) match our existing constraint model. Paid plans start at $300/month, so validate fit on free tier first.
+
+Edamam is the runner-up if equipment filtering weren't a requirement — better recipe volume and more granular nutrients, but can't filter by appliance.
+
+Possible integration approach: use Spoonacular's `/recipes/complexSearch` with `equipment`, `maxCalories`, `maxSodium`, `maxReadyTime` params to fetch curated real recipes, then pass them through the existing `passesConstraints` check in `packages/core/src/constraints.ts` before presenting as candidates — bypassing AI generation for those meal types.
 
 ## AI generation cost
 Modest today (~single-digit dollars/month for two people), but easy wins:

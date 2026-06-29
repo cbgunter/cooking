@@ -64,20 +64,63 @@ function isAnthropicError(err: unknown): boolean {
   );
 }
 
+// Corey and Luisa — used for the "both users disliked" permanent ban rule.
+const HOUSEHOLD_USERS = ["cbgunter@gmail.com", "lmalava87@gmail.com"];
+
+const MEAL_TYPES = ["breakfast", "lunch", "dinner"] as const;
+
 async function run(weekStart: string, eventMealCounts?: MealCounts, appendMode = false) {
   const apiKey = await getAnthropicKey();
 
-  const [prefs, recentRecipes, highlyRatedRecipes, dislikedRecipes, ratings, week] =
+  const [prefs, recentRecipes, highlyRatedRecipes, dislikedRecipes, ratings, downvotes, week] =
     await Promise.all([
       db.getPreferences(),
       db.getRecentRecipes(4),
       db.getHighlyRatedRecipes(4),
       db.getDislikedRecipes(),
       db.getAllRatings(),
+      db.getAllRecipeDownvotes(),
       db.getWeek(weekStart),
     ]);
 
+  // For top-up regenerations, fetch the current candidates so we can exclude
+  // their titles from the new batch (ensuring fresh, different options).
+  const currentCandidates = appendMode && week?.candidateRecipeIds.length
+    ? await db.getRecipesByIds(week.candidateRecipeIds)
+    : [];
+
   const resolvedPrefs = prefs ?? DEFAULT_PREFERENCES;
+
+  // Apply thumbs-down exclusion rules:
+  //   both users thumbed down        → permanent ban
+  //   same user thumbed down 2+ times → avoid 180 days
+  //   any single thumbs-down         → avoid 90 days
+  const nowMs = Date.now();
+  const downvoteDisliked: Array<{ title: string; notes?: string; permanent?: boolean }> = [];
+  for (const dv of downvotes) {
+    if (dv.downvotes.length === 0) continue;
+    const voterEmails = new Set(dv.downvotes.map((d) => d.userEmail));
+    const bothDisliked = HOUSEHOLD_USERS.every((u) => voterEmails.has(u));
+    if (bothDisliked) {
+      downvoteDisliked.push({ title: dv.displayTitle, permanent: true });
+      continue;
+    }
+    const maxUserCount = Math.max(
+      ...HOUSEHOLD_USERS.map((u) => dv.downvotes.filter((d) => d.userEmail === u).length)
+    );
+    const avoidDays = maxUserCount >= 2 ? 180 : 90;
+    const latestTs = dv.downvotes.reduce(
+      (latest, d) => (d.timestamp > latest ? d.timestamp : latest),
+      dv.downvotes[0]!.timestamp
+    );
+    const daysSince = (nowMs - new Date(latestTs).getTime()) / 86_400_000;
+    if (daysSince < avoidDays) {
+      const notes = maxUserCount >= 2 ? "thumbed down multiple times" : "thumbs down";
+      downvoteDisliked.push({ title: dv.displayTitle, notes });
+    }
+  }
+
+  const allDisliked = [...dislikedRecipes, ...downvoteDisliked];
 
   // Determine per-type meal counts: event → stored week → default spread
   const mealCounts: MealCounts =
@@ -85,15 +128,25 @@ async function run(weekStart: string, eventMealCounts?: MealCounts, appendMode =
     week?.mealCounts ??
     defaultMealCounts(resolvedPrefs.defaultDaysPerWeek);
 
+  // Titles of current candidates for the types being regenerated — Claude will
+  // avoid repeating them, ensuring a fresh batch different from what's on screen.
+  const regenTypes = appendMode
+    ? MEAL_TYPES.filter((t) => (mealCounts[t] ?? 0) > 0)
+    : [];
+  const excludeTitles = currentCandidates
+    .filter((r) => regenTypes.includes(r.mealType as typeof MEAL_TYPES[number]))
+    .map((r) => r.title);
+
   const { recipes, totalGenerated, totalRejected } = await generateMenuCandidates({
     prefs: resolvedPrefs,
     recentRecipes,
     highlyRatedRecipes,
-    dislikedRecipes,
+    dislikedRecipes: allDisliked,
     ratings,
     mealCounts,
     weekStart,
     apiKey,
+    excludeTitles,
   });
 
   console.log(
@@ -125,11 +178,21 @@ async function run(weekStart: string, eventMealCounts?: MealCounts, appendMode =
   await db.saveRecipes(recipes);
 
   if (appendMode && week) {
-    // Append new candidates without touching status or existing selections.
+    // Replace unselected candidates of the regenerated types with the new batch.
+    // Confirmed picks (in week.selections) are always retained so shop/cook/eat
+    // views can still resolve them.
+    const selectedIds = new Set(week.selections.map((s) => s.recipeId));
+    const candidateById = new Map(currentCandidates.map((r) => [r.id, r]));
+    const keptIds = week.candidateRecipeIds.filter((id) => {
+      const r = candidateById.get(id);
+      if (!r) return true;                                                      // unknown — keep safely
+      if (selectedIds.has(id)) return true;                                     // never drop a confirmed pick
+      return !regenTypes.includes(r.mealType as typeof MEAL_TYPES[number]);    // drop unselected of regenerated types
+    });
     const { topUpMealCounts: _removed, ...weekRest } = week;
     await db.saveWeek({
       ...weekRest,
-      candidateRecipeIds: [...week.candidateRecipeIds, ...recipes.map((r) => r.id)],
+      candidateRecipeIds: [...keptIds, ...recipes.map((r) => r.id)],
       updatedAt: now,
     });
     return;

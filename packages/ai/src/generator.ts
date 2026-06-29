@@ -13,13 +13,15 @@ export interface GenerateMenuOptions {
   prefs: HouseholdPreferences;
   recentRecipes?: Recipe[];
   highlyRatedRecipes?: Recipe[];
-  dislikedRecipes?: Array<{ title: string; notes?: string }>;
+  dislikedRecipes?: Array<{ title: string; notes?: string; permanent?: boolean }>;
   ratings?: Rating[];
   /** Per-type user day counts; see buildTargetCounts for candidate counts. */
   mealCounts: MealCounts;
   weekStart: string;
   apiKey: string;
   model?: string;
+  /** Recipe titles already on screen that the new batch must not repeat. */
+  excludeTitles?: string[];
 }
 
 export interface GenerateMenuResult {
@@ -44,6 +46,7 @@ export async function generateMenuCandidates(
     weekStart,
     apiKey,
     model = "claude-sonnet-4-6",
+    excludeTitles = [],
   } = opts;
 
   const client = new Anthropic({ apiKey });
@@ -63,7 +66,7 @@ export async function generateMenuCandidates(
   // emits the later meal types — so we isolate each type for reliability.
   const perType = await Promise.all(
     MEAL_TYPES.map((mealType) =>
-      generateForMealType(client, model, prefs, mealType, targets[mealType], baseCtx)
+      generateForMealType(client, model, prefs, mealType, targets[mealType], baseCtx, excludeTitles)
     )
   );
 
@@ -86,7 +89,8 @@ async function generateForMealType(
   prefs: HouseholdPreferences,
   mealType: MealType,
   target: number,
-  baseCtx: Omit<GenerationContext, "targetCounts">
+  baseCtx: Omit<GenerationContext, "targetCounts">,
+  excludeTitles: string[] = []
 ): Promise<{ recipes: Recipe[]; generated: number; rejected: number }> {
   if (target === 0) return { recipes: [], generated: 0, rejected: 0 };
 
@@ -109,7 +113,7 @@ async function generateForMealType(
       result = await runRound(client, model, prefs, {
         ...baseCtx,
         targetCounts,
-        existingTitles: accepted.map((r) => r.title),
+        existingTitles: [...excludeTitles, ...accepted.map((r) => r.title)],
       });
     } catch (err) {
       // Isolate failures: one meal type erroring shouldn't lose the others.

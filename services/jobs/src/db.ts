@@ -6,7 +6,7 @@ import {
   BatchWriteCommand,
   ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
-import type { HouseholdPreferences, Recipe, Week, Rating } from "@cooking/core";
+import type { HouseholdPreferences, Recipe, Week, Rating, RecipeDownvote } from "@cooking/core";
 
 const TABLE_NAME = process.env["TABLE_NAME"] ?? "";
 
@@ -88,6 +88,12 @@ export async function getRecipe(id: string): Promise<Recipe | null> {
   return rest as unknown as Recipe;
 }
 
+export async function getRecipesByIds(ids: string[]): Promise<Recipe[]> {
+  if (ids.length === 0) return [];
+  const recipes = await Promise.all(ids.map((id) => getRecipe(id)));
+  return recipes.filter((r): r is Recipe => r !== null);
+}
+
 export async function getHighlyRatedRecipes(minStars = 4): Promise<Recipe[]> {
   const result = await ddb.send(
     new ScanCommand({
@@ -140,6 +146,20 @@ export async function getAllRatings(): Promise<Rating[]> {
   );
   return ((result.Items ?? []) as Record<string, unknown>[]).map(
     ({ PK: _pk, SK: _sk, ...rest }) => rest as unknown as Rating
+  );
+}
+
+export async function getAllRecipeDownvotes(): Promise<RecipeDownvote[]> {
+  const result = await ddb.send(
+    new ScanCommand({
+      TableName: TABLE_NAME,
+      FilterExpression: "PK = :pk AND begins_with(#SK, :prefix)",
+      ExpressionAttributeNames: { "#SK": "SK" },
+      ExpressionAttributeValues: { ":pk": "HOUSEHOLD", ":prefix": "DOWNVOTE#" },
+    })
+  );
+  return ((result.Items ?? []) as Record<string, unknown>[]).map(
+    ({ PK: _pk, SK: _sk, ...rest }) => rest as unknown as RecipeDownvote
   );
 }
 

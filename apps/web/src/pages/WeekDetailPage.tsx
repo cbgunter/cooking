@@ -388,8 +388,9 @@ export default function WeekDetailPage() {
     for (const sel of week.selections) {
       selectedByType[sel.mealType] = (selectedByType[sel.mealType] ?? 0) + (sel.quantity ?? 1);
     }
-    const missingTypes = MEAL_ORDER.filter(
-      (t) => (week.mealCounts?.[t] ?? 0) > 0 && selectedByType[t] < (week.mealCounts?.[t] ?? 0)
+    // Only show top-up for types where the user is still short of their target.
+    const shortTypes = MEAL_ORDER.filter(
+      (t) => selectedByType[t] < (week.mealCounts?.[t] ?? 0)
     );
 
     const selectedIds = new Set(week.selections.map((s) => s.recipeId));
@@ -449,21 +450,27 @@ export default function WeekDetailPage() {
           </div>
         )}
 
-        {/* Missing meal types — top-up flow */}
-        {missingTypes.length > 0 && (
+        {/* Finish your plan — top-up flow for types still short of target */}
+        {shortTypes.length > 0 && (
           <section style={{ margin: "0 16px 24px" }}>
             <h2 style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--stone)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>
-              Missing meals
+              Finish your plan
             </h2>
-            {missingTypes.map((type) => {
+            {shortTypes.map((type) => {
               const isGenerating = !!week.topUpMealCounts?.[type];
-              const newCandidates = candidates.filter(
+              const altCandidates = candidates.filter(
                 (r) => r.mealType === type && !selectedIds.has(r.id)
               );
+              const target = week.mealCounts?.[type] ?? 0;
+              const chosen = selectedByType[type];
+              const shortfall = Math.max(1, target - chosen);
               return (
-                <div key={type} style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--ink)", textTransform: "capitalize", marginBottom: 8 }}>
+                <div key={type} style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--ink)", textTransform: "capitalize", marginBottom: 6 }}>
                     {type}
+                    <span style={{ fontWeight: 400, color: "var(--stone)", marginLeft: 6 }}>
+                      {chosen} of {target} chosen
+                    </span>
                   </div>
                   {isGenerating ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0" }}>
@@ -472,35 +479,38 @@ export default function WeekDetailPage() {
                         Finding {type} options…
                       </span>
                     </div>
-                  ) : newCandidates.length > 0 ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {newCandidates.map((r) => {
-                        const qty = topUpQuantities.get(r.id) ?? 0;
-                        return (
-                          <RecipeCard
-                            key={r.id}
-                            recipe={r}
-                            quantity={qty}
-                            onQuantityChange={(delta) => {
-                              setTopUpQuantities((prev) => {
-                                const next = new Map(prev);
-                                next.set(r.id, Math.max(0, (prev.get(r.id) ?? 0) + delta));
-                                return next;
-                              });
-                            }}
-                            onDetail={() => navigate(`/recipes/${r.id}`, { state: { weekStart } })}
-                          />
-                        );
-                      })}
-                    </div>
                   ) : (
-                    <button
-                      className="btn btn-outline"
-                      style={{ fontSize: "0.83rem", width: "100%" }}
-                      onClick={() => handleTopUp({ breakfast: 0, lunch: 0, dinner: 0, [type]: week.mealCounts?.[type] ?? 1 })}
-                    >
-                      Get {type} options
-                    </button>
+                    <>
+                      {altCandidates.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
+                          {altCandidates.map((r) => {
+                            const qty = topUpQuantities.get(r.id) ?? 0;
+                            return (
+                              <RecipeCard
+                                key={r.id}
+                                recipe={r}
+                                quantity={qty}
+                                onQuantityChange={(delta) => {
+                                  setTopUpQuantities((prev) => {
+                                    const next = new Map(prev);
+                                    next.set(r.id, Math.max(0, (prev.get(r.id) ?? 0) + delta));
+                                    return next;
+                                  });
+                                }}
+                                onDetail={() => navigate(`/recipes/${r.id}`, { state: { weekStart } })}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                      <button
+                        className="btn btn-outline"
+                        style={{ fontSize: "0.83rem", width: "100%" }}
+                        onClick={() => handleTopUp({ breakfast: 0, lunch: 0, dinner: 0, [type]: shortfall })}
+                      >
+                        {altCandidates.length > 0 ? `Get fresh ${type} options` : `Get ${type} options`}
+                      </button>
+                    </>
                   )}
                 </div>
               );
