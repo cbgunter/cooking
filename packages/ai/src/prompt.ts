@@ -87,10 +87,10 @@ export function buildMenuGenerationPrompt(ctx: GenerationContext): PromptParts {
   const distributionLines = (
     [
       targetCounts.breakfast > 0
-        ? `- Breakfast: ${targetCounts.breakfast} recipes (prep-ahead, batch-friendly)`
+        ? `- Breakfast: ${targetCounts.breakfast} recipes (prep-ahead, batch-friendly, ≤10 ingredients per recipe)`
         : null,
       targetCounts.lunch > 0
-        ? `- Lunch: ${targetCounts.lunch} recipes (prep-ahead, batch-friendly)`
+        ? `- Lunch: ${targetCounts.lunch} recipes (prep-ahead, batch-friendly, ≤10 ingredients per recipe)`
         : null,
       targetCounts.dinner > 0
         ? `- Dinner: ${targetCounts.dinner} recipes (cook-fresh, 20–45 min)`
@@ -109,7 +109,8 @@ ${tasteProfileBlock}
 - Max sodium per serving: ${prefs.nutrition.maxSodiumMgPerMeal} mg
 - Total prep + cook time: up to ${prefs.prepTimeRange.maxMinutes} minutes (breakfast and lunch have no minimum; dinner minimum is ${prefs.prepTimeRange.minMinutes} min)
 - Cost per serving: breakfast ≤$${prefs.costCaps.breakfast}, lunch ≤$${prefs.costCaps.lunch}, dinner ≤$${prefs.costCaps.dinner}
-- Avoid (ingredients/cuisines): ${ingredientDislikes}
+- Avoid (ingredients, cuisines, AND formats/presentations — treat each item as a full category ban): ${ingredientDislikes}
+  Example: "jar" bans mason jar meals, jar salads, overnight oats in a jar, and any dish built around or served in a jar.
 
 ## Preferences
 - Cuisine preferences: ${cuisinePrefsText}
