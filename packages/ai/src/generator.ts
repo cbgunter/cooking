@@ -22,6 +22,8 @@ export interface GenerateMenuOptions {
   model?: string;
   /** Recipe titles already on screen that the new batch must not repeat. */
   excludeTitles?: string[];
+  /** Recipes the household upvoted this week — lean toward their style for new candidates. */
+  preferredRecipes?: Array<{ title: string; cuisine: string }>;
 }
 
 export interface GenerateMenuResult {
@@ -50,6 +52,7 @@ export async function generateMenuCandidates(
     apiKey,
     model = "claude-sonnet-4-6",
     excludeTitles = [],
+    preferredRecipes = [],
   } = opts;
 
   const client = new Anthropic({ apiKey });
@@ -62,6 +65,7 @@ export async function generateMenuCandidates(
     dislikedRecipes,
     ratings,
     weekStart,
+    preferredRecipes,
   };
 
   // Generate each meal type in its own parallel chain of sequential chunk calls.
@@ -162,16 +166,24 @@ async function runRound(
   const total = ctx.targetCounts.breakfast + ctx.targetCounts.lunch + ctx.targetCounts.dinner;
   if (total === 0) return { recipes: [], generated: 0, rejected: 0 };
 
-  const prompt = buildMenuGenerationPrompt(ctx);
+  const { cachePrefix, suffix } = buildMenuGenerationPrompt(ctx);
 
   const stream = client.messages.stream({
     model,
-    max_tokens: 24000,
+    max_tokens: 20000,
     thinking: { type: "adaptive" },
     tools: [RECIPE_TOOL_SCHEMA as Anthropic.Tool],
     tool_choice: { type: "any" },
-    messages: [{ role: "user", content: prompt }],
-  });
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: cachePrefix, cache_control: { type: "ephemeral" } },
+          { type: "text", text: suffix },
+        ],
+      },
+    ],
+  } as Parameters<typeof client.messages.stream>[0]);
 
   const response = await stream.finalMessage();
 

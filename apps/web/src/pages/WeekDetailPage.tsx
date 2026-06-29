@@ -696,6 +696,8 @@ function RecipeCard({
         <span>·</span>
         <span>{recipe.nutrition.calories} cal</span>
         <span>·</span>
+        <span>{recipe.nutrition.sodiumMg}mg sodium</span>
+        <span>·</span>
         <span>${recipe.costPerServing.toFixed(2)}/person</span>
       </div>
 

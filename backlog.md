@@ -57,7 +57,8 @@ Fine at current scale (two users, hundreds of rows). These matter as data grows:
 - **Scans won't scale** — every read path in `services/api/src/db.ts` and `services/jobs/src/db.ts` uses `Scan` + `FilterExpression` (recent recipes, ratings, all weeks). Cheap now, linear-cost later. When recipe/rating count grows, add a GSI (e.g. `SK` as PK) and convert hot paths to `Query`.
 - **`/eat` and `/weeks` fan out over all weeks** — `handler.ts` loops every week doing per-week recipe + rating fetches (N+1). Combine with `BatchGetItem` and cap/paginate to the last ~6 weeks.
 - **API Lambda timeout sits at 29s** (`api-stack.ts:102`), one second under the API Gateway hard limit, while `/eat` does unbounded per-week work. Bound the work (above) rather than just raising the timeout.
-- **Frontend polls every 5s** in ChoosePage / WeekDetailPage while a week is pending. Generation takes 10–30s. Back off (5s → 10s → 20s) to cut redundant `/weeks` (Scan-backed) calls.
+- **Frontend polls every 5s** in ChoosePage / WeekDetailPage while a week is pending. Generation now takes ~3 minutes (up from ~30s after the mise en place prepSteps/cookSteps added more output tokens per recipe). Back off (5s → 10s → 20s) to cut redundant `/weeks` (Scan-backed) calls.
+- **Generation speed regression** — adding `prepSteps`/`cookSteps` (commit c237c27) roughly 6×'d generation time (~30s → ~3min). The main levers: right-size `max_tokens` per meal type (currently a blanket 24000 in `packages/ai/src/generator.ts`), add prompt caching on the shared context prefix, and consider reducing dinner chunk count for smaller week sizes.
 
 ## Recipe API for nutrition/equipment filtering
 

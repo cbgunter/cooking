@@ -11,9 +11,20 @@ export interface GenerationContext {
   weekStart: string;
   /** Already-accepted candidates (title + cuisine) — new batch must avoid these cells */
   existingCandidates?: Array<{ title: string; cuisine: string }>;
+  /** Recipes upvoted this week — lean toward their style for new candidates (top-up only) */
+  preferredRecipes?: Array<{ title: string; cuisine: string }>;
 }
 
-export function buildMenuGenerationPrompt(ctx: GenerationContext): string {
+export interface PromptParts {
+  /** Run-static context — identical across all chunk calls in a generation run.
+   *  Safe to mark with cache_control: ephemeral. */
+  cachePrefix: string;
+  /** Per-call dynamic content — target counts, variety contract, existing candidates.
+   *  Must NOT be cached. */
+  suffix: string;
+}
+
+export function buildMenuGenerationPrompt(ctx: GenerationContext): PromptParts {
   const { prefs, recentRecipes, highlyRatedRecipes, dislikedRecipes, targetCounts } = ctx;
 
   const total = targetCounts.breakfast + targetCounts.lunch + targetCounts.dinner;
@@ -61,6 +72,10 @@ export function buildMenuGenerationPrompt(ctx: GenerationContext): string {
       "Lean toward known favorites and reliable classics. New recipes should be gentle variations.",
   };
 
+  const preferredBlock = ctx.preferredRecipes?.length
+    ? `\n## Liked from this week's options (the household upvoted these — lean toward this style and cuisine for the new options, but do NOT clone them)\n${ctx.preferredRecipes.map((r) => `- ${r.title} (${r.cuisine})`).join("\n")}\n`
+    : "";
+
   const existingBlock = ctx.existingCandidates?.length
     ? `\n## Already on the menu (do not repeat — also avoid their protein+method cells)\n${ctx.existingCandidates.map((c) => `- ${c.title} (${c.cuisine})`).join("\n")}\n`
     : "";
@@ -85,29 +100,16 @@ export function buildMenuGenerationPrompt(ctx: GenerationContext): string {
     .filter(Boolean)
     .join("\n");
 
-  return `You are a personal meal planner for a household of ${prefs.peopleCount} people.
-
-Generate exactly ${total} recipe candidates for the week of ${ctx.weekStart}.
+  // ── Cache prefix: run-static context, byte-identical across all chunk calls ──
+  // Covers everything that doesn't change between the ~10+ calls in one generation run.
+  const cachePrefix = `You are a personal meal planner for a household of ${prefs.peopleCount} people.
 ${tasteProfileBlock}
-## Distribution (MUST match exactly)
-${distributionLines}
-
 ## Hard constraints (NEVER violate these)
 - Max calories per serving: ${prefs.nutrition.maxCaloriesPerMeal} kcal
 - Max sodium per serving: ${prefs.nutrition.maxSodiumMgPerMeal} mg
 - Total prep + cook time: up to ${prefs.prepTimeRange.maxMinutes} minutes (breakfast and lunch have no minimum; dinner minimum is ${prefs.prepTimeRange.minMinutes} min)
 - Cost per serving: breakfast ≤$${prefs.costCaps.breakfast}, lunch ≤$${prefs.costCaps.lunch}, dinner ≤$${prefs.costCaps.dinner}
 - Avoid (ingredients/cuisines): ${ingredientDislikes}
-
-## Variety contract (CRITICAL — read before generating)
-These ${total} recipes are a menu to choose from, not variations of one dish.
-Before calling add_recipe, use your thinking to map out a spread across these axes:
-- Primary protein: chicken / beef / pork / fish / shellfish / eggs / legumes-tofu / other
-  → No single protein should appear in more than ${Math.ceil(total / 3)} of the ${total} recipes.
-- Cuisine / flavor profile: aim for mostly distinct cuisines across the set.
-- Cooking format: sheet-pan, stir-fry, soup/stew, salad/bowl, pasta, tacos, curry, roast, sandwich, grain bowl, etc.
-
-**Hard rule:** Two candidates that share the SAME primary protein AND the SAME cooking format are too similar — change at least one axis.
 
 ## Preferences
 - Cuisine preferences: ${cuisinePrefsText}
@@ -124,17 +126,36 @@ ${bannedText}
 
 ## Avoid for now (recently thumbed down or rated poorly)
 ${dislikedText}
-${existingBlock}
+${preferredBlock}
 ## Ingredient reuse
 Where it does not reduce variety, prefer shareable ingredients to limit waste and grocery cost. **Variety across candidates takes priority over ingredient overlap.** Include a reuseNotes field when ingredients genuinely overlap.
 
 ## Instructions format (mise en place)
 Structure steps in two phases:
 - **prepSteps** (2–4 steps): all mise en place — washing, chopping, measuring, marinating, preheating. Everything that can be done before heat is applied. Consolidate related actions into one step (e.g., "Dice the onion, mince the garlic, and slice the peppers." not three separate steps).
-- **cookSteps** (2–5 steps): the actual cooking sequence in order. Each step should be a meaningful stage (e.g., sauté aromatics, add protein and sauce, simmer and finish) — not a single micro-action per line.
+- **cookSteps** (2–5 steps): the actual cooking sequence in order. Each step should be a meaningful stage (e.g., sauté aromatics, add protein and sauce, simmer and finish) — not a single micro-action per line.`;
 
+  // ── Suffix: per-call dynamic content ──
+  // Changes every chunk: total count, distribution, variety contract thresholds, existing candidates.
+  const suffix = `Generate exactly ${total} recipe candidates for the week of ${ctx.weekStart}.
+
+## Distribution (MUST match exactly)
+${distributionLines}
+
+## Variety contract (CRITICAL — read before generating)
+These ${total} recipes are a menu to choose from, not variations of one dish.
+Before calling add_recipe, use your thinking to map out a spread across these axes:
+- Primary protein: chicken / beef / pork / fish / shellfish / eggs / legumes-tofu / other
+  → No single protein should appear in more than ${Math.ceil(total / 3)} of the ${total} recipes.
+- Cuisine / flavor profile: aim for mostly distinct cuisines across the set.
+- Cooking format: sheet-pan, stir-fry, soup/stew, salad/bowl, pasta, tacos, curry, roast, sandwich, grain bowl, etc.
+
+**Hard rule:** Two candidates that share the SAME primary protein AND the SAME cooking format are too similar — change at least one axis.
+${existingBlock}
 ## Output format
 Use the add_recipe tool exactly ${total} times — once per recipe. Be precise with nutritional estimates; they must be realistic for the exact ingredients and quantities listed. All quantities must serve ${prefs.peopleCount} people (i.e., servings = ${prefs.peopleCount}).`;
+
+  return { cachePrefix, suffix };
 }
 
 function getRating(recipeId: string, ratings: Rating[]): number {

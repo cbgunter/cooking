@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { Rating } from "@cooking/core";
 import * as api from "../api.js";
 import type { EatMeal } from "../api.js";
-import { getNameForEmail } from "../auth.js";
+import { getCurrentUserEmail, getNameForEmail } from "../auth.js";
 
 const MEAL_COLORS: Record<string, string> = {
   breakfast: "#F5E8DE",
@@ -72,16 +72,44 @@ function RatingBlock({ rating }: { rating: Rating }) {
   );
 }
 
-function MealCard({ meal, onOpen }: { meal: EatMeal; onOpen: () => void }) {
-  const { recipe, ratings } = meal;
+function MealCard({
+  meal,
+  currentUserEmail,
+  onOpen,
+  onRated,
+}: {
+  meal: EatMeal;
+  currentUserEmail: string;
+  onOpen: () => void;
+  onRated: () => void;
+}) {
+  const { recipe, ratings, weekStart } = meal;
+  const [showForm, setShowForm] = useState(false);
+  const [stars, setStars] = useState<0 | 1 | 2 | 3 | 4 | 5>(0);
+  const [makeAgain, setMakeAgain] = useState(true);
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const hasMyRating = ratings.some((r) => r.ratedBy === currentUserEmail);
+
+  const handleSubmit = async (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    if (stars === 0) return;
+    setSubmitting(true);
+    try {
+      await api.submitRating(recipe.id, stars as 1 | 2 | 3 | 4 | 5, makeAgain, notes || undefined, weekStart);
+      onRated();
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <div
-      className="card"
-      style={{ padding: 0, overflow: "hidden", cursor: "pointer" }}
-      onClick={onOpen}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div
+        style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", cursor: "pointer" }}
+        onClick={onOpen}
+      >
         <div
           style={{
             width: 40,
@@ -107,8 +135,14 @@ function MealCard({ meal, onOpen }: { meal: EatMeal; onOpen: () => void }) {
             {recipe.mealType} · {recipe.cuisine}
           </div>
         </div>
-        {ratings.length === 0 && (
-          <span style={{ fontSize: "0.7rem", color: "var(--stone)", flexShrink: 0 }}>Not rated</span>
+        {!hasMyRating && !showForm && (
+          <button
+            className="btn btn-outline"
+            style={{ fontSize: "0.72rem", padding: "4px 10px", flexShrink: 0 }}
+            onClick={(e) => { e.stopPropagation(); setShowForm(true); }}
+          >
+            Rate
+          </button>
         )}
       </div>
 
@@ -122,6 +156,83 @@ function MealCard({ meal, onOpen }: { meal: EatMeal; onOpen: () => void }) {
           ))}
         </div>
       )}
+
+      {showForm && (
+        <div
+          style={{ padding: "12px 14px", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 10 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: "flex", gap: 4 }}>
+            {([1, 2, 3, 4, 5] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStars(s)}
+                style={{ fontSize: "1.5rem", opacity: s <= stars ? 1 : 0.3, background: "none", border: "none", cursor: "pointer", padding: 2 }}
+              >
+                ⭐
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              className="btn"
+              onClick={() => setMakeAgain(true)}
+              style={{
+                flex: 1, fontSize: "0.82rem",
+                background: makeAgain ? "var(--clay)" : "#fff",
+                color: makeAgain ? "#fff" : "var(--slate)",
+                border: `1.5px solid ${makeAgain ? "var(--clay)" : "var(--border)"}`,
+              }}
+            >
+              Make again
+            </button>
+            <button
+              className="btn"
+              onClick={() => setMakeAgain(false)}
+              style={{
+                flex: 1, fontSize: "0.82rem",
+                background: !makeAgain ? "#e53e3e" : "#fff",
+                color: !makeAgain ? "#fff" : "var(--slate)",
+                border: `1.5px solid ${!makeAgain ? "#e53e3e" : "var(--border)"}`,
+              }}
+            >
+              Pass next time
+            </button>
+          </div>
+
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Optional notes…"
+            rows={2}
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              border: "1.5px solid var(--border)",
+              borderRadius: 8,
+              fontFamily: "inherit",
+              fontSize: "0.85rem",
+              resize: "none",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setShowForm(false)}>
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              style={{ flex: 2 }}
+              onClick={handleSubmit}
+              disabled={stars === 0 || submitting}
+            >
+              {submitting ? "Saving…" : "Save rating"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -130,11 +241,18 @@ export default function EatPage() {
   const [meals, setMeals] = useState<EatMeal[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const currentUserEmail = getCurrentUserEmail() ?? "";
+
+  const loadMeals = () => {
+    api.getEatMeals().then(({ meals: m }) => setMeals(m)).finally(() => setLoading(false));
+  };
+
+  const refreshMeals = () => {
+    api.getEatMeals().then(({ meals: m }) => setMeals(m));
+  };
 
   useEffect(() => {
-    api.getEatMeals()
-      .then(({ meals: m }) => setMeals(m))
-      .finally(() => setLoading(false));
+    loadMeals();
   }, []);
 
   // Group consecutive meals by weekStart, preserving server order (most recent first)
@@ -193,11 +311,13 @@ export default function EatPage() {
                   <MealCard
                     key={`${meal.weekStart}-${meal.recipe.id}`}
                     meal={meal}
+                    currentUserEmail={currentUserEmail}
                     onOpen={() =>
                       navigate(`/recipes/${meal.recipe.id}`, {
                         state: { weekStart: meal.weekStart },
                       })
                     }
+                    onRated={refreshMeals}
                   />
                 ))}
               </div>

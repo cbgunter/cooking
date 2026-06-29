@@ -22,10 +22,6 @@ export default function RecipePage() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [step, setStep] = useState(0);
   const [cooked, setCooked] = useState(false);
-  const [stars, setStars] = useState<1 | 2 | 3 | 4 | 5 | 0>(0);
-  const [makeAgain, setMakeAgain] = useState(true);
-  const [notes, setNotes] = useState("");
-  const [showRating, setShowRating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -67,18 +63,6 @@ export default function RecipePage() {
     try {
       await api.markCooked(id, weekStart);
       setCooked(true);
-      setShowRating(true);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleSubmitRating = async () => {
-    if (!id || stars === 0) return;
-    setSubmitting(true);
-    try {
-      await api.submitRating(id, stars, makeAgain, notes || undefined, weekStart);
-      navigate(-1);
     } finally {
       setSubmitting(false);
     }
@@ -267,83 +251,6 @@ export default function RecipePage() {
             </div>
           </section>
 
-          {/* Rating panel */}
-          {showRating && (
-            <section style={{ padding: "16px 20px", borderTop: "1px solid var(--border)" }}>
-              <h2 style={{ marginBottom: 12 }}>How was it?</h2>
-
-              <div className="row gap-3" style={{ marginBottom: 16 }}>
-                {([1, 2, 3, 4, 5] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setStars(s)}
-                    style={{
-                      fontSize: "1.8rem",
-                      opacity: s <= stars ? 1 : 0.3,
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                    }}
-                  >
-                    ⭐
-                  </button>
-                ))}
-              </div>
-
-              <div className="row gap-3" style={{ marginBottom: 16 }}>
-                <button
-                  onClick={() => setMakeAgain(true)}
-                  className="btn"
-                  style={{
-                    flex: 1,
-                    background: makeAgain ? "var(--clay)" : "#fff",
-                    color: makeAgain ? "#fff" : "var(--slate)",
-                    border: `1.5px solid ${makeAgain ? "var(--clay)" : "var(--border)"}`,
-                  }}
-                >
-                  Make again
-                </button>
-                <button
-                  onClick={() => setMakeAgain(false)}
-                  className="btn"
-                  style={{
-                    flex: 1,
-                    background: !makeAgain ? "#e53e3e" : "#fff",
-                    color: !makeAgain ? "#fff" : "var(--slate)",
-                    border: `1.5px solid ${!makeAgain ? "#e53e3e" : "var(--border)"}`,
-                  }}
-                >
-                  Pass next time
-                </button>
-              </div>
-
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Optional notes…"
-                rows={3}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  border: "1.5px solid var(--border)",
-                  borderRadius: 10,
-                  fontFamily: "inherit",
-                  fontSize: "0.9rem",
-                  resize: "none",
-                  marginBottom: 12,
-                }}
-              />
-
-              <button
-                className="btn btn-primary"
-                onClick={handleSubmitRating}
-                disabled={stars === 0 || submitting}
-                style={{ width: "100%" }}
-              >
-                {submitting ? "Saving…" : "Save & done"}
-              </button>
-            </section>
-          )}
         </div>
       </div>
     </div>

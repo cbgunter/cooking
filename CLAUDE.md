@@ -103,6 +103,8 @@ Candidate counts: breakfast and lunch always generate **4 candidates** regardles
 
 **Extended thinking**: each Claude call uses `thinking: { type: "adaptive" }` so the model plans variety across the variety contract before committing to tool calls.
 
+**Generation time**: currently ~3 minutes for a full week (up from ~30s before the mise en place `prepSteps`/`cookSteps` fields were added — more output tokens per recipe). The Generate Lambda timeout is 5 minutes. See the backlog for optimization opportunities (`max_tokens` right-sizing, prompt caching).
+
 If a type returns zero accepted candidates after retries, the week moves to `error` status.
 
 **Constraint filtering** (`packages/core/src/constraints.ts`): breakfast and lunch are exempt from the minimum prep-time floor — only dinner enforces it. All other constraints (calories, sodium, cost, max time, dislikes) apply to all meal types.

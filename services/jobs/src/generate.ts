@@ -89,6 +89,37 @@ async function run(weekStart: string, eventMealCounts?: MealCounts, appendMode =
     ? await db.getRecipesByIds(week.candidateRecipeIds)
     : [];
 
+  // Bucket this-week votes into prefer/avoid signals for top-up generation.
+  // Only fires when currentCandidates is populated (appendMode), so initial
+  // generation is completely unaffected.
+  const candidateById = new Map(currentCandidates.map((r) => [r.id, r]));
+  const votedDown: Array<{ title: string; notes?: string }> = [];
+  const preferredRecipes: Array<{ title: string; cuisine: string }> = [];
+
+  if (appendMode && week?.votes) {
+    // Tally up/down votes per recipe across all users.
+    const tallies = new Map<string, { up: number; down: number }>();
+    for (const perRecipe of Object.values(week.votes)) {
+      for (const [recipeId, vote] of Object.entries(perRecipe)) {
+        const t = tallies.get(recipeId) ?? { up: 0, down: 0 };
+        if (vote === "up") t.up++;
+        else if (vote === "down") t.down++;
+        tallies.set(recipeId, t);
+      }
+    }
+
+    for (const [recipeId, { up, down }] of tallies) {
+      const recipe = candidateById.get(recipeId);
+      if (!recipe) continue;
+      if (down > 0 && up === 0) {
+        votedDown.push({ title: recipe.title, notes: "thumbed down on this week's menu" });
+      } else if (up > 0 && down === 0) {
+        preferredRecipes.push({ title: recipe.title, cuisine: recipe.cuisine });
+      }
+      // mixed votes (disagreement) → skip; leave to the conflict-resolution backlog item
+    }
+  }
+
   const resolvedPrefs = prefs ?? DEFAULT_PREFERENCES;
 
   // Apply thumbs-down exclusion rules:
@@ -120,7 +151,7 @@ async function run(weekStart: string, eventMealCounts?: MealCounts, appendMode =
     }
   }
 
-  const allDisliked = [...dislikedRecipes, ...downvoteDisliked];
+  const allDisliked = [...dislikedRecipes, ...downvoteDisliked, ...votedDown];
 
   // Determine per-type meal counts: event → stored week → default spread
   const mealCounts: MealCounts =
@@ -147,6 +178,7 @@ async function run(weekStart: string, eventMealCounts?: MealCounts, appendMode =
     weekStart,
     apiKey,
     excludeTitles,
+    preferredRecipes,
   });
 
   console.log(
@@ -182,7 +214,6 @@ async function run(weekStart: string, eventMealCounts?: MealCounts, appendMode =
     // Confirmed picks (in week.selections) are always retained so shop/cook/eat
     // views can still resolve them.
     const selectedIds = new Set(week.selections.map((s) => s.recipeId));
-    const candidateById = new Map(currentCandidates.map((r) => [r.id, r]));
     const keptIds = week.candidateRecipeIds.filter((id) => {
       const r = candidateById.get(id);
       if (!r) return true;                                                      // unknown — keep safely

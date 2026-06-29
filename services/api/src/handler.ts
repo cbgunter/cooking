@@ -3,8 +3,101 @@ import { cors } from "hono/cors";
 import { handle } from "hono/aws-lambda";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { buildShoppingList, DEFAULT_PREFERENCES } from "@cooking/core";
-import type { Week, WeekSelection, MealCounts } from "@cooking/core";
+import type { Week, WeekSelection, MealCounts, HouseholdPreferences } from "@cooking/core";
 import * as db from "./db.js";
+
+function validatePreferences(body: unknown): { ok: true; value: HouseholdPreferences } | { ok: false; error: string } {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, error: "Body must be an object" };
+  }
+  const b = body as Record<string, unknown>;
+
+  const posNum = (v: unknown, name: string, max?: number): string | null => {
+    if (typeof v !== "number" || !isFinite(v) || v < 0) return `${name} must be a non-negative number`;
+    if (max !== undefined && v > max) return `${name} must be ≤ ${max}`;
+    return null;
+  };
+  const posNumGt0 = (v: unknown, name: string): string | null => {
+    const e = posNum(v, name);
+    if (e) return e;
+    if ((v as number) < 1) return `${name} must be ≥ 1`;
+    return null;
+  };
+  const strArr = (v: unknown, name: string): string | null => {
+    if (!Array.isArray(v) || v.some((x) => typeof x !== "string")) return `${name} must be an array of strings`;
+    return null;
+  };
+
+  const errors: string[] = [];
+  const push = (e: string | null) => { if (e) errors.push(e); };
+
+  push(posNumGt0(b["peopleCount"], "peopleCount"));
+  push(posNum(b["defaultDaysPerWeek"], "defaultDaysPerWeek", 7));
+  push(strArr(b["dislikes"], "dislikes"));
+  push(strArr(b["cuisinePreferences"], "cuisinePreferences"));
+
+  const cc = b["costCaps"];
+  if (typeof cc !== "object" || cc === null || Array.isArray(cc)) {
+    errors.push("costCaps must be an object");
+  } else {
+    const c = cc as Record<string, unknown>;
+    push(posNum(c["breakfast"], "costCaps.breakfast"));
+    push(posNum(c["lunch"], "costCaps.lunch"));
+    push(posNum(c["dinner"], "costCaps.dinner"));
+  }
+
+  const nu = b["nutrition"];
+  if (typeof nu !== "object" || nu === null || Array.isArray(nu)) {
+    errors.push("nutrition must be an object");
+  } else {
+    const n = nu as Record<string, unknown>;
+    push(posNum(n["maxCaloriesPerMeal"], "nutrition.maxCaloriesPerMeal"));
+    push(posNum(n["maxSodiumMgPerMeal"], "nutrition.maxSodiumMgPerMeal"));
+  }
+
+  const pt = b["prepTimeRange"];
+  if (typeof pt !== "object" || pt === null || Array.isArray(pt)) {
+    errors.push("prepTimeRange must be an object");
+  } else {
+    const p = pt as Record<string, unknown>;
+    push(posNum(p["minMinutes"], "prepTimeRange.minMinutes"));
+    push(posNum(p["maxMinutes"], "prepTimeRange.maxMinutes"));
+    if (errors.length === 0 && typeof p["minMinutes"] === "number" && typeof p["maxMinutes"] === "number" && p["minMinutes"] > p["maxMinutes"]) {
+      errors.push("prepTimeRange.minMinutes must be ≤ maxMinutes");
+    }
+  }
+
+  const validAdventure = ["adventurous", "balanced", "comfort"];
+  if (!validAdventure.includes(b["adventureLevel"] as string)) {
+    errors.push(`adventureLevel must be one of: ${validAdventure.join(", ")}`);
+  }
+
+  push(posNum(b["reminderDayOfWeek"], "reminderDayOfWeek", 6));
+  if (typeof b["notificationEmail"] !== "string") errors.push("notificationEmail must be a string");
+  if (b["tasteProfile"] !== undefined && typeof b["tasteProfile"] !== "string") errors.push("tasteProfile must be a string");
+
+  if (errors.length > 0) return { ok: false, error: errors.join("; ") };
+
+  const cc2 = b["costCaps"] as Record<string, unknown>;
+  const nu2 = b["nutrition"] as Record<string, unknown>;
+  const pt2 = b["prepTimeRange"] as Record<string, unknown>;
+
+  const value: HouseholdPreferences = {
+    peopleCount: b["peopleCount"] as number,
+    defaultDaysPerWeek: b["defaultDaysPerWeek"] as number,
+    dislikes: b["dislikes"] as string[],
+    cuisinePreferences: b["cuisinePreferences"] as string[],
+    costCaps: { breakfast: cc2["breakfast"] as number, lunch: cc2["lunch"] as number, dinner: cc2["dinner"] as number },
+    nutrition: { maxCaloriesPerMeal: nu2["maxCaloriesPerMeal"] as number, maxSodiumMgPerMeal: nu2["maxSodiumMgPerMeal"] as number },
+    prepTimeRange: { minMinutes: pt2["minMinutes"] as number, maxMinutes: pt2["maxMinutes"] as number },
+    adventureLevel: b["adventureLevel"] as HouseholdPreferences["adventureLevel"],
+    reminderDayOfWeek: b["reminderDayOfWeek"] as number,
+    notificationEmail: b["notificationEmail"] as string,
+    ...(b["tasteProfile"] !== undefined && { tasteProfile: b["tasteProfile"] as string }),
+  };
+
+  return { ok: true, value };
+}
 
 const app = new Hono();
 app.use("*", cors());
@@ -77,9 +170,11 @@ app.get("/preferences", async (c) => {
 });
 
 app.put("/preferences", async (c) => {
-  const body = await c.req.json();
-  await db.savePreferences(body);
-  return c.json(body);
+  const body: unknown = await c.req.json();
+  const result = validatePreferences(body);
+  if (!result.ok) return c.json({ error: result.error }, 400);
+  await db.savePreferences(result.value);
+  return c.json(result.value);
 });
 
 // ── All weeks ─────────────────────────────────────────────────────────────
