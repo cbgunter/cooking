@@ -55,6 +55,8 @@ export interface Recipe {
   prepSteps: string[];
   /** Mise en place: the cooking steps, run after all prep is done */
   cookSteps: string[];
+  /** @deprecated Legacy flat steps from before mise en place split; present on older recipes */
+  steps?: string[];
   nutrition: Nutrition;
   /** estimated cost per serving in USD */
   costPerServing: number;

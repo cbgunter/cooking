@@ -50,9 +50,13 @@ export default function RecipePage() {
   }
 
   const totalMin = recipe.prepMinutes + recipe.cookMinutes;
+  // Legacy recipes have a flat `steps` array; new ones use prepSteps + cookSteps.
+  const legacySteps = recipe.steps ?? [];
+  const prepSteps = recipe.prepSteps?.length ? recipe.prepSteps : [];
+  const cookSteps = recipe.cookSteps?.length ? recipe.cookSteps : legacySteps;
   const allSteps = [
-    ...recipe.prepSteps.map((text, i) => ({ phase: "Prep" as const, phaseIndex: i, text })),
-    ...recipe.cookSteps.map((text, i) => ({ phase: "Cook" as const, phaseIndex: i, text })),
+    ...prepSteps.map((text, i) => ({ phase: "Prep" as const, phaseIndex: i, text })),
+    ...cookSteps.map((text, i) => ({ phase: "Cook" as const, phaseIndex: i, text })),
   ];
   const currentStep = allSteps[step];
   const isLastStep = step === allSteps.length - 1;
@@ -183,7 +187,7 @@ export default function RecipePage() {
             <h2 style={{ marginBottom: 4 }}>Instructions</h2>
             <p className="text-xs text-muted" style={{ marginBottom: 16 }}>
               {currentStep?.phase} {(currentStep?.phaseIndex ?? 0) + 1} of{" "}
-              {currentStep?.phase === "Prep" ? recipe.prepSteps.length : recipe.cookSteps.length}
+              {currentStep?.phase === "Prep" ? prepSteps.length : cookSteps.length}
             </p>
 
             <div
@@ -224,7 +228,7 @@ export default function RecipePage() {
 
             {/* Step dots — two groups with a divider */}
             <div className="row" style={{ marginTop: 12, flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-              {recipe.prepSteps.map((_, i) => (
+              {prepSteps.map((_, i) => (
                 <button
                   key={`prep-${i}`}
                   onClick={() => setStep(i)}
@@ -239,11 +243,11 @@ export default function RecipePage() {
                   {i + 1}
                 </button>
               ))}
-              {recipe.prepSteps.length > 0 && recipe.cookSteps.length > 0 && (
+              {prepSteps.length > 0 && cookSteps.length > 0 && (
                 <span style={{ color: "var(--border)", fontSize: "1rem", lineHeight: 1 }}>|</span>
               )}
-              {recipe.cookSteps.map((_, i) => {
-                const globalIndex = recipe.prepSteps.length + i;
+              {cookSteps.map((_, i) => {
+                const globalIndex = prepSteps.length + i;
                 return (
                   <button
                     key={`cook-${i}`}
