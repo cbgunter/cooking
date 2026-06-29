@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { getToken } from "./auth.js";
+import { getFreshToken } from "./auth.js";
 import AppShell from "./components/AppShell.js";
 import LoginPage from "./pages/LoginPage.js";
 import ChoosePage from "./pages/ChoosePage.js";
@@ -17,7 +17,7 @@ export default function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    setAuthed(getToken() !== null);
+    getFreshToken().then((token) => setAuthed(token !== null));
   }, []);
 
   if (authed === null) return null;

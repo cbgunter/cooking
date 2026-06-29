@@ -24,6 +24,24 @@ export function getToken(): string | null {
   return token;
 }
 
+/** Returns a valid ID token, refreshing via Cognito's refresh token if the stored one is expired. */
+export async function getFreshToken(): Promise<string | null> {
+  const user = userPool.getCurrentUser();
+  if (!user) return null;
+  return new Promise((resolve) => {
+    user.getSession((err: Error | null, session: { isValid: () => boolean; getIdToken: () => { getJwtToken: () => string; getExpiration: () => number } } | null) => {
+      if (err || !session || !session.isValid()) {
+        resolve(null);
+        return;
+      }
+      const idToken = session.getIdToken();
+      localStorage.setItem(TOKEN_KEY, idToken.getJwtToken());
+      localStorage.setItem(EXPIRES_KEY, String(idToken.getExpiration() * 1000));
+      resolve(idToken.getJwtToken());
+    });
+  });
+}
+
 export async function signIn(email: string, password: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const user = new CognitoUser({ Username: email, Pool: userPool });
