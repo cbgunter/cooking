@@ -6,13 +6,31 @@ interface AppShellProps {
   onSignOut: () => void;
 }
 
-const NAV_LINKS = [
+const FLOW_LINKS = [
+  { label: "Home", path: "/" },
   { label: "Choose", path: "/choose" },
   { label: "Shop", path: "/shop" },
   { label: "Cook", path: "/cook" },
   { label: "Eat", path: "/eat" },
-  { label: "Settings", path: "/preferences" },
 ];
+
+function GearIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
 
 export default function AppShell({ children, onSignOut }: AppShellProps) {
   const navigate = useNavigate();
@@ -24,10 +42,16 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
     onSignOut();
   };
 
-  // Which top-level section is active (controls whether the tab strip shows)
-  const activeSection = NAV_LINKS.find(
-    (l) => location.pathname === l.path || location.pathname.startsWith(l.path + "/")
-  );
+  const isActive = (path: string) => {
+    if (path === "/") return location.pathname === "/";
+    return (
+      location.pathname === path || location.pathname.startsWith(path + "/")
+    );
+  };
+
+  // Show the flow nav on product pages only (not home or preferences)
+  const showFlowNav =
+    location.pathname !== "/" && location.pathname !== "/preferences";
 
   return (
     <div
@@ -72,9 +96,9 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
             {name}
           </span>
 
-          {/* Wordmark (center) — crisp serif text, not the image */}
+          {/* Wordmark (center) — navigates to home */}
           <button
-            onClick={() => navigate("/choose")}
+            onClick={() => navigate("/")}
             style={{
               background: "none",
               border: "none",
@@ -94,28 +118,51 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
             Cooking
           </button>
 
-          {/* Sign out (right) */}
-          <button
-            onClick={handleSignOut}
+          {/* Right cluster: gear + sign out */}
+          <div
             style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.8rem",
-              color: "var(--stone)",
-              letterSpacing: "0.02em",
-              padding: "4px 0",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
               minWidth: 70,
-              textAlign: "right",
+              justifyContent: "flex-end",
             }}
           >
-            Sign out
-          </button>
+            <button
+              onClick={() => navigate("/preferences")}
+              title="Settings"
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--stone)",
+                padding: "4px 6px",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <GearIcon />
+            </button>
+            <button
+              onClick={handleSignOut}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                color: "var(--stone)",
+                letterSpacing: "0.02em",
+                padding: "4px 0",
+              }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Section tab strip */}
-      {activeSection && (
+      {/* Flow nav strip: Home → Choose → Shop → Cook → Eat */}
+      {showFlowNav && (
         <div
           style={{
             background: "var(--paper)",
@@ -126,34 +173,46 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
           <div
             style={{
               display: "flex",
-              gap: 0,
+              alignItems: "center",
               padding: "0 20px",
               maxWidth: 1100,
               margin: "0 auto",
             }}
           >
-            {NAV_LINKS.map(({ label, path }) => {
-              const active =
-                location.pathname === path || location.pathname.startsWith(path + "/");
+            {FLOW_LINKS.map(({ label, path }, i) => {
+              const active = isActive(path);
               return (
-                <button
-                  key={path}
-                  onClick={() => navigate(path)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "10px 16px 9px",
-                    fontSize: "0.82rem",
-                    fontWeight: active ? 600 : 400,
-                    color: active ? "var(--garden)" : "var(--stone)",
-                    borderBottom: `2px solid ${active ? "var(--garden)" : "transparent"}`,
-                    letterSpacing: "0.01em",
-                    transition: "color 0.15s, border-color 0.15s",
-                  }}
-                >
-                  {label}
-                </button>
+                <div key={path} style={{ display: "flex", alignItems: "center" }}>
+                  {i > 0 && (
+                    <span
+                      style={{
+                        color: "var(--line)",
+                        fontSize: "0.75rem",
+                        margin: "0 2px",
+                        userSelect: "none",
+                      }}
+                    >
+                      ›
+                    </span>
+                  )}
+                  <button
+                    onClick={() => navigate(path)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: "10px 10px 9px",
+                      fontSize: "0.82rem",
+                      fontWeight: active ? 600 : 400,
+                      color: active ? "var(--garden)" : "var(--stone)",
+                      borderBottom: `2px solid ${active ? "var(--garden)" : "transparent"}`,
+                      letterSpacing: "0.01em",
+                      transition: "color 0.15s, border-color 0.15s",
+                    }}
+                  >
+                    {label}
+                  </button>
+                </div>
               );
             })}
           </div>

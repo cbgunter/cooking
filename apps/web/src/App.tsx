@@ -12,6 +12,7 @@ import ShopPage from "./pages/ShopPage.js";
 import CookPage from "./pages/CookPage.js";
 import CookWeekPage from "./pages/CookWeekPage.js";
 import EatPage from "./pages/EatPage.js";
+import HomePage from "./pages/HomePage.js";
 
 export default function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -23,7 +24,7 @@ export default function App() {
   if (authed === null) return null;
 
   const handleLogin = () => {
-    window.history.replaceState({}, "", "/choose");
+    window.history.replaceState({}, "", "/");
     setAuthed(true);
   };
 
@@ -40,7 +41,7 @@ export default function App() {
     <BrowserRouter>
       <AppShell onSignOut={handleSignOut}>
         <Routes>
-          <Route path="/" element={<Navigate to="/choose" replace />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/choose" element={<ChoosePage />} />
           <Route path="/weeks/:weekStart" element={<WeekDetailPage />} />
           <Route path="/shop" element={<ShopPage />} />
