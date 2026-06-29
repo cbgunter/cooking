@@ -59,23 +59,18 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
             position: "relative",
           }}
         >
-          {/* Sign out (left) */}
-          <button
-            onClick={handleSignOut}
+          {/* Signed-in name (left) */}
+          <span
             style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
               fontSize: "0.8rem",
               color: "var(--stone)",
               letterSpacing: "0.02em",
-              padding: "4px 0",
               minWidth: 70,
               textAlign: "left",
             }}
           >
-            Sign out
-          </button>
+            {name}
+          </span>
 
           {/* Wordmark (center) — crisp serif text, not the image */}
           <button
@@ -99,18 +94,23 @@ export default function AppShell({ children, onSignOut }: AppShellProps) {
             Cooking
           </button>
 
-          {/* Signed-in name (right) — balances the header */}
-          <span
+          {/* Sign out (right) */}
+          <button
+            onClick={handleSignOut}
             style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
               fontSize: "0.8rem",
               color: "var(--stone)",
               letterSpacing: "0.02em",
+              padding: "4px 0",
               minWidth: 70,
               textAlign: "right",
             }}
           >
-            {name}
-          </span>
+            Sign out
+          </button>
         </div>
       </header>
 
