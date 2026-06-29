@@ -9,8 +9,8 @@ export interface GenerationContext {
   /** Per-type candidate targets (already 2× user days) */
   targetCounts: MealCounts;
   weekStart: string;
-  /** Titles already accepted — used in top-up rounds to avoid repeats */
-  existingTitles?: string[];
+  /** Already-accepted candidates (title + cuisine) — new batch must avoid these cells */
+  existingCandidates?: Array<{ title: string; cuisine: string }>;
 }
 
 export function buildMenuGenerationPrompt(ctx: GenerationContext): string {
@@ -61,8 +61,12 @@ export function buildMenuGenerationPrompt(ctx: GenerationContext): string {
       "Lean toward known favorites and reliable classics. New recipes should be gentle variations.",
   };
 
-  const existing = ctx.existingTitles?.length
-    ? `\n## Already accepted (do not repeat)\n${ctx.existingTitles.map((t) => `- ${t}`).join("\n")}\n`
+  const existingBlock = ctx.existingCandidates?.length
+    ? `\n## Already on the menu (do not repeat — also avoid their protein+method cells)\n${ctx.existingCandidates.map((c) => `- ${c.title} (${c.cuisine})`).join("\n")}\n`
+    : "";
+
+  const tasteProfileBlock = prefs.tasteProfile?.trim()
+    ? `\n## How this household actually eats\n${prefs.tasteProfile.trim()}\nUse this as the primary style anchor — generate dishes that feel like natural fits for these tastes.\n`
     : "";
 
   const distributionLines = (
@@ -84,7 +88,7 @@ export function buildMenuGenerationPrompt(ctx: GenerationContext): string {
   return `You are a personal meal planner for a household of ${prefs.peopleCount} people.
 
 Generate exactly ${total} recipe candidates for the week of ${ctx.weekStart}.
-
+${tasteProfileBlock}
 ## Distribution (MUST match exactly)
 ${distributionLines}
 
@@ -95,14 +99,24 @@ ${distributionLines}
 - Cost per serving: breakfast ≤$${prefs.costCaps.breakfast}, lunch ≤$${prefs.costCaps.lunch}, dinner ≤$${prefs.costCaps.dinner}
 - Avoid (ingredients/cuisines): ${ingredientDislikes}
 
+## Variety contract (CRITICAL — read before generating)
+These ${total} recipes are a menu to choose from, not variations of one dish.
+Before calling add_recipe, use your thinking to map out a spread across these axes:
+- Primary protein: chicken / beef / pork / fish / shellfish / eggs / legumes-tofu / other
+  → No single protein should appear in more than ${Math.ceil(total / 3)} of the ${total} recipes.
+- Cuisine / flavor profile: aim for mostly distinct cuisines across the set.
+- Cooking format: sheet-pan, stir-fry, soup/stew, salad/bowl, pasta, tacos, curry, roast, sandwich, grain bowl, etc.
+
+**Hard rule:** Two candidates that share the SAME primary protein AND the SAME cooking format are too similar — change at least one axis.
+
 ## Preferences
 - Cuisine preferences: ${cuisinePrefsText}
 - Adventure level: ${prefs.adventureLevel} → ${adventureGuidance[prefs.adventureLevel] ?? ""}
 
-## Recent history (avoid repeating)
+## Recent history (don't repeat these exact dishes — but they reflect household taste, so stay stylistically compatible)
 ${recentTitles}
 
-## Household favorites
+## Household favorites (generate new dishes in this spirit — similar vibe and comfort level — but vary the specifics, do NOT clone them)
 ${favoriteTitles}
 
 ## NEVER recommend these again (both users rejected them)
@@ -110,9 +124,9 @@ ${bannedText}
 
 ## Avoid for now (recently thumbed down or rated poorly)
 ${dislikedText}
-${existing}
+${existingBlock}
 ## Ingredient reuse
-Design the week so that ingredients overlap across meals where practical to minimize waste and grocery cost. Include a reuseNotes field indicating which ingredients are shared across multiple recipes.
+Where it does not reduce variety, prefer shareable ingredients to limit waste and grocery cost. **Variety across candidates takes priority over ingredient overlap.** Include a reuseNotes field when ingredients genuinely overlap.
 
 ## Output format
 Use the add_recipe tool exactly ${total} times — once per recipe. Be precise with nutritional estimates; they must be realistic for the exact ingredients and quantities listed. All quantities must serve ${prefs.peopleCount} people (i.e., servings = ${prefs.peopleCount}).`;

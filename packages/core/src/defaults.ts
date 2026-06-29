@@ -21,4 +21,5 @@ export const DEFAULT_PREFERENCES: HouseholdPreferences = {
   adventureLevel: "balanced",
   reminderDayOfWeek: 4, // Thursday
   notificationEmail: "",
+  tasteProfile: "",
 };

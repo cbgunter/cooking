@@ -60,8 +60,8 @@ export default function CookWeekPage() {
     );
   }
 
-  // Build ordered list: breakfast first, then lunch, then dinner; expand quantities
-  const mealRows: Array<{ recipe: Recipe; type: MealType }> = [];
+  // Build ordered list: breakfast first, then lunch, then dinner; collapse duplicates
+  const mealRows: Array<{ recipe: Recipe; type: MealType; quantity: number }> = [];
   for (const type of MEAL_ORDER) {
     const typeSels = week.selections.filter((s) => {
       const recipe = candidates.find((r) => r.id === s.recipeId);
@@ -70,9 +70,11 @@ export default function CookWeekPage() {
     for (const sel of typeSels) {
       const recipe = candidates.find((r) => r.id === sel.recipeId);
       if (!recipe) continue;
-      const qty = sel.quantity ?? 1;
-      for (let i = 0; i < qty; i++) {
-        mealRows.push({ recipe, type });
+      const existing = mealRows.find((r) => r.recipe.id === recipe.id);
+      if (existing) {
+        existing.quantity += sel.quantity ?? 1;
+      } else {
+        mealRows.push({ recipe, type, quantity: sel.quantity ?? 1 });
       }
     }
   }
@@ -102,11 +104,11 @@ export default function CookWeekPage() {
               {type}
             </h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {rows.map(({ recipe }, idx) => {
+              {rows.map(({ recipe, quantity }) => {
                 const cooked = cookedSet.has(recipe.id);
                 return (
                   <button
-                    key={`${recipe.id}-${idx}`}
+                    key={recipe.id}
                     onClick={() => navigate(`/recipes/${recipe.id}`, { state: { weekStart } })}
                     style={{
                       display: "flex",
@@ -125,6 +127,11 @@ export default function CookWeekPage() {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--ink)" }}>
                         {recipe.title}
+                        {quantity > 1 && (
+                          <span style={{ fontWeight: 400, color: "var(--stone)", marginLeft: 6 }}>
+                            ×{quantity}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: "0.75rem", color: "var(--stone)", marginTop: 2 }}>
                         {recipe.cuisine} · {recipe.prepMinutes + recipe.cookMinutes} min

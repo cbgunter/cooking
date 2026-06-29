@@ -150,6 +150,8 @@ export interface HouseholdPreferences {
   reminderDayOfWeek: number;
   /** email address for reminders */
   notificationEmail: string;
+  /** free-text description of what the household typically eats, used to ground generation */
+  tasteProfile?: string;
 }
 
 export interface RecipeDownvoteEntry {

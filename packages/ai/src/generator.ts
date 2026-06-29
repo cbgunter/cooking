@@ -30,7 +30,10 @@ export interface GenerateMenuResult {
   totalRejected: number;
 }
 
-const MAX_TOPUP_ROUNDS = 2;
+// Generate this many candidates per Claude call; smaller chunks force variety
+// because the model can't settle on a theme across a large batch.
+const CHUNK_SIZE = 2;
+
 const MEAL_TYPES: MealType[] = ["breakfast", "lunch", "dinner"];
 
 export async function generateMenuCandidates(
@@ -61,9 +64,9 @@ export async function generateMenuCandidates(
     weekStart,
   };
 
-  // Generate each meal type in its own request, in parallel. A single combined
-  // request asks for ~14 full recipes and truncates on max_tokens before it
-  // emits the later meal types — so we isolate each type for reliability.
+  // Generate each meal type in its own parallel chain of sequential chunk calls.
+  // Parallel across types (for speed); sequential within a type (so each chunk
+  // sees what's already been accepted and is pushed onto fresh variety cells).
   const perType = await Promise.all(
     MEAL_TYPES.map((mealType) =>
       generateForMealType(client, model, prefs, mealType, targets[mealType], baseCtx, excludeTitles)
@@ -82,14 +85,14 @@ export async function generateMenuCandidates(
   return { recipes: accepted, totalGenerated, totalRejected };
 }
 
-/** Generate candidates for a single meal type, retrying to fill any shortfall. */
+/** Generate candidates for a single meal type in sequential CHUNK_SIZE chunks. */
 async function generateForMealType(
   client: Anthropic,
   model: string,
   prefs: HouseholdPreferences,
   mealType: MealType,
   target: number,
-  baseCtx: Omit<GenerationContext, "targetCounts">,
+  baseCtx: Omit<GenerationContext, "targetCounts" | "existingCandidates">,
   excludeTitles: string[] = []
 ): Promise<{ recipes: Recipe[]; generated: number; rejected: number }> {
   if (target === 0) return { recipes: [], generated: 0, rejected: 0 };
@@ -98,26 +101,43 @@ async function generateForMealType(
   let generated = 0;
   let rejected = 0;
 
-  for (let round = 0; round <= MAX_TOPUP_ROUNDS; round++) {
+  // Seed the "already accepted" set with any externally excluded titles.
+  // We don't have cuisine for these (they're just strings), so mark them as excluded.
+  const externalExcludes: Array<{ title: string; cuisine: string }> = excludeTitles.map((t) => ({
+    title: t,
+    cuisine: "—",
+  }));
+
+  // Max chunks = ceil(target / CHUNK_SIZE) + 2 safety margin.
+  const maxChunks = Math.ceil(target / CHUNK_SIZE) + 2;
+
+  for (let chunk = 0; chunk < maxChunks; chunk++) {
     const shortfall = target - accepted.length;
     if (shortfall <= 0) break;
 
+    const chunkSize = Math.min(CHUNK_SIZE, shortfall);
     const targetCounts: MealCounts = {
-      breakfast: mealType === "breakfast" ? shortfall : 0,
-      lunch: mealType === "lunch" ? shortfall : 0,
-      dinner: mealType === "dinner" ? shortfall : 0,
+      breakfast: mealType === "breakfast" ? chunkSize : 0,
+      lunch: mealType === "lunch" ? chunkSize : 0,
+      dinner: mealType === "dinner" ? chunkSize : 0,
     };
+
+    // Pass all already-accepted candidates (title + cuisine) so the next chunk
+    // is pushed onto fresh protein/method/cuisine territory.
+    const existingCandidates: Array<{ title: string; cuisine: string }> = [
+      ...externalExcludes,
+      ...accepted.map((r) => ({ title: r.title, cuisine: r.cuisine })),
+    ];
 
     let result: { recipes: Recipe[]; generated: number; rejected: number };
     try {
       result = await runRound(client, model, prefs, {
         ...baseCtx,
         targetCounts,
-        existingTitles: [...excludeTitles, ...accepted.map((r) => r.title)],
+        existingCandidates,
       });
     } catch (err) {
-      // Isolate failures: one meal type erroring shouldn't lose the others.
-      console.error(JSON.stringify({ mealType, round, error: String(err) }));
+      console.error(JSON.stringify({ mealType, chunk, error: String(err) }));
       break;
     }
 
@@ -126,7 +146,7 @@ async function generateForMealType(
     rejected += result.rejected + (result.recipes.length - matching.length);
     accepted.push(...matching);
 
-    // A round that produced nothing on-type won't improve on retry — stop early.
+    // A chunk that produced nothing on-type won't improve on retry — stop early.
     if (matching.length === 0) break;
   }
 

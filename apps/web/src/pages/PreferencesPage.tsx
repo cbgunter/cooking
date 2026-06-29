@@ -174,6 +174,27 @@ export default function PreferencesPage() {
           </div>
         </Section>
 
+        {/* Taste profile */}
+        <Section title="What you usually eat">
+          <textarea
+            value={prefs.tasteProfile ?? ""}
+            onChange={(e) => update({ tasteProfile: e.target.value })}
+            placeholder="e.g. Lots of Mediterranean and grain bowls, sheet-pan dinners, not much red meat, love bold spices…"
+            rows={4}
+            style={{
+              ...inputStyle,
+              maxWidth: "100%",
+              width: "100%",
+              resize: "vertical",
+              fontFamily: "inherit",
+              lineHeight: 1.5,
+            }}
+          />
+          <p style={{ fontSize: "0.8rem", color: "var(--slate-light)", marginTop: 4 }}>
+            Describe your household's taste — this grounds every generation.
+          </p>
+        </Section>
+
         {/* Dislikes */}
         <Section title="Dislikes / avoid">
           <div className="row gap-2" style={{ marginBottom: 8 }}>
