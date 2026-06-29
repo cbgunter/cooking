@@ -17,7 +17,8 @@ export const RECIPE_TOOL_SCHEMA = {
       "prepMinutes",
       "cookMinutes",
       "ingredients",
-      "steps",
+      "prepSteps",
+      "cookSteps",
       "nutrition",
       "costPerServing",
     ],
@@ -74,7 +75,16 @@ export const RECIPE_TOOL_SCHEMA = {
           },
         },
       },
-      steps: { type: "array", items: { type: "string" } },
+      prepSteps: {
+        type: "array",
+        items: { type: "string" },
+        description: "Mise en place prep steps — all chopping, measuring, marinating, and pre-heating done before cooking starts. Consolidate into 2–4 steps.",
+      },
+      cookSteps: {
+        type: "array",
+        items: { type: "string" },
+        description: "Cooking steps — heat application, assembly, plating. Consolidate into 2–5 steps. Run after all prepSteps are complete.",
+      },
       nutrition: {
         type: "object",
         required: ["calories", "sodiumMg", "proteinG", "carbsG", "fatG"],

@@ -50,8 +50,12 @@ export default function RecipePage() {
   }
 
   const totalMin = recipe.prepMinutes + recipe.cookMinutes;
-  const isLastStep = step === recipe.steps.length - 1;
-  const stepText = recipe.steps[step] ?? "";
+  const allSteps = [
+    ...recipe.prepSteps.map((text, i) => ({ phase: "Prep" as const, phaseIndex: i, text })),
+    ...recipe.cookSteps.map((text, i) => ({ phase: "Cook" as const, phaseIndex: i, text })),
+  ];
+  const currentStep = allSteps[step];
+  const isLastStep = step === allSteps.length - 1;
 
   const handleMarkCooked = async () => {
     if (!id) return;
@@ -178,14 +182,15 @@ export default function RecipePage() {
           <section style={{ padding: "16px 20px" }}>
             <h2 style={{ marginBottom: 4 }}>Instructions</h2>
             <p className="text-xs text-muted" style={{ marginBottom: 16 }}>
-              Step {step + 1} of {recipe.steps.length}
+              {currentStep?.phase} {(currentStep?.phaseIndex ?? 0) + 1} of{" "}
+              {currentStep?.phase === "Prep" ? recipe.prepSteps.length : recipe.cookSteps.length}
             </p>
 
             <div
               className="card"
               style={{ minHeight: 200, display: "flex", alignItems: "flex-start", marginBottom: 16 }}
             >
-              <p style={{ lineHeight: 1.7, fontSize: "1rem" }}>{stepText}</p>
+              <p style={{ lineHeight: 1.7, fontSize: "1rem" }}>{currentStep?.text}</p>
             </div>
 
             <div className="row gap-2">
@@ -217,27 +222,44 @@ export default function RecipePage() {
               )}
             </div>
 
-            {/* Step dots */}
-            <div className="row gap-2" style={{ marginTop: 12, flexWrap: "wrap" }}>
-              {recipe.steps.map((_, i) => (
+            {/* Step dots — two groups with a divider */}
+            <div className="row" style={{ marginTop: 12, flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+              {recipe.prepSteps.map((_, i) => (
                 <button
-                  key={i}
+                  key={`prep-${i}`}
                   onClick={() => setStep(i)}
                   style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "50%",
-                    border: "2px solid " + (i === step ? "var(--clay)" : "var(--border)"),
-                    background: i === step ? "var(--clay)" : "transparent",
+                    width: 28, height: 28, borderRadius: "50%",
+                    border: "2px solid " + (i === step ? "var(--garden)" : "var(--border)"),
+                    background: i === step ? "var(--garden)" : "transparent",
                     color: i === step ? "#fff" : "var(--slate-light)",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
+                    fontSize: "0.75rem", fontWeight: 600, cursor: "pointer",
                   }}
                 >
                   {i + 1}
                 </button>
               ))}
+              {recipe.prepSteps.length > 0 && recipe.cookSteps.length > 0 && (
+                <span style={{ color: "var(--border)", fontSize: "1rem", lineHeight: 1 }}>|</span>
+              )}
+              {recipe.cookSteps.map((_, i) => {
+                const globalIndex = recipe.prepSteps.length + i;
+                return (
+                  <button
+                    key={`cook-${i}`}
+                    onClick={() => setStep(globalIndex)}
+                    style={{
+                      width: 28, height: 28, borderRadius: "50%",
+                      border: "2px solid " + (globalIndex === step ? "var(--apricot)" : "var(--border)"),
+                      background: globalIndex === step ? "var(--apricot)" : "transparent",
+                      color: globalIndex === step ? "#fff" : "var(--slate-light)",
+                      fontSize: "0.75rem", fontWeight: 600, cursor: "pointer",
+                    }}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
             </div>
           </section>
 

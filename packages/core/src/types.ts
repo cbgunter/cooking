@@ -51,7 +51,10 @@ export interface Recipe {
   prepMinutes: number;
   cookMinutes: number;
   ingredients: Ingredient[];
-  steps: string[];
+  /** Mise en place: all prep work before any heat is applied */
+  prepSteps: string[];
+  /** Mise en place: the cooking steps, run after all prep is done */
+  cookSteps: string[];
   nutrition: Nutrition;
   /** estimated cost per serving in USD */
   costPerServing: number;

@@ -128,6 +128,11 @@ ${existingBlock}
 ## Ingredient reuse
 Where it does not reduce variety, prefer shareable ingredients to limit waste and grocery cost. **Variety across candidates takes priority over ingredient overlap.** Include a reuseNotes field when ingredients genuinely overlap.
 
+## Instructions format (mise en place)
+Structure steps in two phases:
+- **prepSteps** (2–4 steps): all mise en place — washing, chopping, measuring, marinating, preheating. Everything that can be done before heat is applied. Consolidate related actions into one step (e.g., "Dice the onion, mince the garlic, and slice the peppers." not three separate steps).
+- **cookSteps** (2–5 steps): the actual cooking sequence in order. Each step should be a meaningful stage (e.g., sauté aromatics, add protein and sauce, simmer and finish) — not a single micro-action per line.
+
 ## Output format
 Use the add_recipe tool exactly ${total} times — once per recipe. Be precise with nutritional estimates; they must be realistic for the exact ingredients and quantities listed. All quantities must serve ${prefs.peopleCount} people (i.e., servings = ${prefs.peopleCount}).`;
 }
