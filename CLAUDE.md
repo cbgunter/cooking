@@ -95,7 +95,15 @@ pending → selecting → shopping → cooking → done
 
 Candidate counts: breakfast and lunch always generate **4 candidates** regardless of day count (user picks 1–2). Dinner generates **2× the requested night count**. Logic lives in `packages/ai/src/prompt.ts` → `buildTargetCounts`.
 
-Each meal type is generated in its own parallel Claude request so a truncation or API error on one type doesn't lose the others. If a type returns zero accepted candidates after retries, the week moves to `error` status.
+**Chunked batching** (`CHUNK_SIZE = 2`): within each meal type, candidates are generated in sequential chunks of 2. Each chunk receives the already-accepted titles+cuisines as context, pushing the model onto fresh protein/method/cuisine territory. All three meal types run in parallel; chunks within a type are sequential.
+
+**Variety contract**: the prompt enforces diversity across three axes — primary protein (no single protein in more than ⌈N/3⌉ of N recipes), cuisine/flavor profile, and cooking format (sheet-pan, stir-fry, soup, etc.). Two candidates sharing the same protein AND cooking format are rejected by the prompt rule.
+
+**Taste profile**: if `HouseholdPreferences.tasteProfile` is set, it is injected into the prompt as the primary style anchor, ahead of cuisine preferences and adventure level.
+
+**Extended thinking**: each Claude call uses `thinking: { type: "adaptive" }` so the model plans variety across the variety contract before committing to tool calls.
+
+If a type returns zero accepted candidates after retries, the week moves to `error` status.
 
 **Constraint filtering** (`packages/core/src/constraints.ts`): breakfast and lunch are exempt from the minimum prep-time floor — only dinner enforces it. All other constraints (calories, sodium, cost, max time, dislikes) apply to all meal types.
 

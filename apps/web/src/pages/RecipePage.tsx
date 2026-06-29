@@ -183,9 +183,9 @@ export default function RecipePage() {
 
             <div
               className="card"
-              style={{ minHeight: 120, display: "flex", alignItems: "center", marginBottom: 16 }}
+              style={{ minHeight: 200, display: "flex", alignItems: "flex-start", marginBottom: 16 }}
             >
-              <p style={{ lineHeight: 1.6, fontSize: "1rem" }}>{stepText}</p>
+              <p style={{ lineHeight: 1.7, fontSize: "1rem" }}>{stepText}</p>
             </div>
 
             <div className="row gap-2">
